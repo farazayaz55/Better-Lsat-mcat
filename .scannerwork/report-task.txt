@@ -1,0 +1,6 @@
+projectKey=local-nestjs
+serverUrl=http://localhost:9000
+serverVersion=25.9.0.112764
+dashboardUrl=http://localhost:9000/dashboard?id=local-nestjs
+ceTaskId=af68f970-126f-4b0a-a616-df51418f9a7f
+ceTaskUrl=http://localhost:9000/api/ce/task?id=af68f970-126f-4b0a-a616-df51418f9a7f
