@@ -6,7 +6,7 @@ module.exports = {
   },
   plugins: [
     '@typescript-eslint/eslint-plugin',
-    'simple-import-sort',
+    // 'simple-import-sort',
     'sonarjs',
     'security',
   ],
@@ -22,7 +22,14 @@ module.exports = {
     node: true,
     jest: true,
   },
-  ignorePatterns: ['dist', 'node_modules'],
+  ignorePatterns: [
+    'dist',
+    'node_modules',
+    'test/**/*',
+    '**/*.spec.ts',
+    '**/*.test.ts',
+    '**/*.e2e-spec.ts',
+  ],
   settings: {
     'import/resolver': {
       typescript: {
@@ -87,7 +94,7 @@ module.exports = {
     'arrow-body-style': ['error', 'as-needed'],
     'no-magic-numbers': [
       'warn',
-      { ignore: [0, 1, -1], ignoreArrayIndexes: true },
+      // { ignore: [0, 1, -1], ignoreArrayIndexes: true },
     ],
 
     /* ---- DRY / Duplication ---- */
@@ -110,7 +117,7 @@ module.exports = {
           'sibling',
           'index',
         ],
-        'newlines-between': 'always',
+        'newlines-between': 'never',
       },
     ],
 

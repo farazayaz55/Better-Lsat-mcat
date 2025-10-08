@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-
 import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
@@ -10,7 +9,6 @@ import {
 } from '../dtos/article-input.dto';
 import { ArticleOutput } from '../dtos/article-output.dto';
 import { ArticleService } from '../services/article.service';
-
 import { ArticleController } from './article.controller';
 
 describe('ArticleController', () => {

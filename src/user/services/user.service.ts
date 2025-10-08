@@ -1,7 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { compare, hash } from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
-
 import { ROLE } from '../../auth/constants/role.constant';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
@@ -146,7 +145,10 @@ export class UserService {
     });
   }
 
-  public async getUserById(ctx: RequestContext, id: number): Promise<UserOutput> {
+  public async getUserById(
+    ctx: RequestContext,
+    id: number,
+  ): Promise<UserOutput> {
     this.logger.log(ctx, `${this.getUserById.name} was called`);
 
     this.logger.log(ctx, `calling ${UserRepository.name}.getById`);
