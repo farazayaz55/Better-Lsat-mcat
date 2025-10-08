@@ -9,6 +9,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { DataSource } from 'typeorm';
 
 import {
   BaseApiErrorResponse,
@@ -18,11 +19,14 @@ import {
 import { AppLogger } from '../../shared/logger/logger.service';
 import { ReqContext } from '../../shared/request-context/req-context.decorator';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
+import { GhlService } from '../../shared/services/Ghl.service';
+import { ROLE } from '../constants/role.constant';
+import { Roles } from '../decorators/role.decorator';
 import { LoginInput } from '../dtos/auth-login-input.dto';
 import { RefreshTokenInput } from '../dtos/auth-refresh-token-input.dto';
 import { RegisterInput } from '../dtos/auth-register-input.dto';
 import { RegisterOutput } from '../dtos/auth-register-output.dto';
-import { AuthTokenOutput } from '../dtos/auth-token-output.dto';
+import { AuthTokenOutput, loginOutput } from '../dtos/auth-token-output.dto';
 import { JwtRefreshGuard } from '../guards/jwt-refresh.guard';
 import { LocalAuthGuard } from '../guards/local-auth.guard';
 import { AuthService } from '../services/auth.service';
@@ -33,6 +37,8 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly logger: AppLogger,
+    private readonly ghlService: GhlService,
+    private readonly dataSource: DataSource,
   ) {
     this.logger.setContext(AuthController.name);
   }
@@ -42,7 +48,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(AuthTokenOutput),
+    type: SwaggerBaseApiResponse(loginOutput),
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
@@ -55,11 +61,11 @@ export class AuthController {
     @ReqContext() ctx: RequestContext,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     @Body() credential: LoginInput,
-  ): BaseApiResponse<AuthTokenOutput> {
+  ): BaseApiResponse<loginOutput> {
     this.logger.log(ctx, `${this.login.name} was called`);
 
     const authToken = this.authService.login(ctx);
-    return { data: authToken, meta: {} };
+    return { data: { auth: authToken, user: ctx.user! }, meta: {} };
   }
 
   @Post('register')
@@ -74,8 +80,50 @@ export class AuthController {
     @ReqContext() ctx: RequestContext,
     @Body() input: RegisterInput,
   ): Promise<BaseApiResponse<RegisterOutput>> {
-    const registeredUser = await this.authService.register(ctx, input);
-    return { data: registeredUser, meta: {} };
+    // Use database transaction to ensure atomicity
+    console.log('input', input);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      let ghlUser = null;
+
+      // Step 1: Create user in GHL (if USER role)
+      if (input.roles.includes(ROLE.USER)) {
+        this.logger.log(ctx, 'Creating user in GHL');
+        ghlUser = await this.ghlService.createUser(input);
+
+        this.logger.log(ctx, 'Adding user to calendar');
+        await this.ghlService.addUserToCalendar(ghlUser);
+      }
+
+      // Step 2: Create user in database
+      this.logger.log(ctx, 'Creating user in database');
+      const registeredUser = await this.authService.register(ctx, input);
+
+      // If we reach here, all operations succeeded
+      await queryRunner.commitTransaction();
+
+      this.logger.log(ctx, 'User registration completed successfully');
+      return { data: registeredUser, meta: {} };
+    } catch (error) {
+      // If any operation fails, rollback the transaction
+      await queryRunner.rollbackTransaction();
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorMeta = error instanceof Error ? { stack: error.stack } : {};
+      this.logger.error(
+        ctx,
+        `User registration failed: ${errorMessage}`,
+        errorMeta,
+      );
+      throw error;
+    } finally {
+      // Release the query runner
+      await queryRunner.release();
+    }
   }
 
   @Post('refresh-token')

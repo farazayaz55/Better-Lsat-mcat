@@ -33,25 +33,19 @@ describe('UserController (e2e)', () => {
   });
 
   describe('Get user me', () => {
-    it('gets user me', async () => {
-      return request(app.getHttpServer())
+    it('gets user me', async () => request(app.getHttpServer())
         .get('/users/me')
         .set('Authorization', 'Bearer ' + authTokenForAdmin.accessToken)
-        .expect(HttpStatus.OK);
-    });
+        .expect(HttpStatus.OK));
 
-    it('Unauthorized error when BearerToken is not provided', async () => {
-      return request(app.getHttpServer())
+    it('Unauthorized error when BearerToken is not provided', async () => request(app.getHttpServer())
         .get('/users/me')
-        .expect(HttpStatus.UNAUTHORIZED);
-    });
+        .expect(HttpStatus.UNAUTHORIZED));
 
-    it('Unauthorized error when BearerToken is wrong', async () => {
-      return request(app.getHttpServer())
+    it('Unauthorized error when BearerToken is wrong', async () => request(app.getHttpServer())
         .get('/users/me')
         .set('Authorization', 'Bearer ' + 'abcd')
-        .expect(HttpStatus.UNAUTHORIZED);
-    });
+        .expect(HttpStatus.UNAUTHORIZED));
   });
 
   describe('get all users', () => {
@@ -76,11 +70,9 @@ describe('UserController (e2e)', () => {
         .expect({ data: expectedOutput, meta: {} });
     });
 
-    it('throws NOT_FOUND when user doesnt exist', () => {
-      return request(app.getHttpServer())
+    it('throws NOT_FOUND when user doesnt exist', () => request(app.getHttpServer())
         .get('/users/99')
-        .expect(HttpStatus.NOT_FOUND);
-    });
+        .expect(HttpStatus.NOT_FOUND));
   });
 
   const updateUserInput = {
@@ -92,7 +84,7 @@ describe('UserController (e2e)', () => {
     it('successfully updates a user', async () => {
       const expectedOutput: UserOutput = {
         ...adminUser,
-        ...{ name: 'New e2etestername' },
+         name: 'New e2etestername' ,
       };
 
       return request(app.getHttpServer())
@@ -106,14 +98,12 @@ describe('UserController (e2e)', () => {
         });
     });
 
-    it('throws NOT_FOUND when user doesnt exist', () => {
-      return request(app.getHttpServer())
+    it('throws NOT_FOUND when user doesnt exist', () => request(app.getHttpServer())
         .patch('/users/99')
-        .expect(HttpStatus.NOT_FOUND);
-    });
+        .expect(HttpStatus.NOT_FOUND));
 
     it('update fails when incorrect password type', () => {
-      updateUserInput.password = 12345 as any;
+      updateUserInput.password = 12_345 as any;
       return request(app.getHttpServer())
         .patch('/users/1')
         .expect(HttpStatus.BAD_REQUEST)

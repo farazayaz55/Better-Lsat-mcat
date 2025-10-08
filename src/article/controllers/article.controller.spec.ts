@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { PaginationParamsDto } from '../../shared/dtos/pagination-params.dto';
+import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { User } from '../../user/entities/user.entity';
@@ -10,6 +10,7 @@ import {
 } from '../dtos/article-input.dto';
 import { ArticleOutput } from '../dtos/article-output.dto';
 import { ArticleService } from '../services/article.service';
+
 import { ArticleController } from './article.controller';
 
 describe('ArticleController', () => {
@@ -97,16 +98,16 @@ describe('ArticleController', () => {
         articles: [],
         meta: null,
       });
-      const queryParams: PaginationParamsDto = {
+      const queryParameters: PaginationParametersDto = {
         limit: 100,
         offset: 0,
       };
 
-      controller.getArticles(ctx, queryParams);
+      controller.getArticles(ctx, queryParameters);
       expect(mockedArticleService.getArticles).toHaveBeenCalledWith(
         ctx,
-        queryParams.limit,
-        queryParams.offset,
+        queryParameters.limit,
+        queryParameters.offset,
       );
     });
   });

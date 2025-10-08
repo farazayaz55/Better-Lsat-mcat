@@ -19,10 +19,10 @@ export class JwtAuthGuard extends AuthGuard(STRATEGY_JWT_AUTH) {
   }
 
   // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-  handleRequest(err: any, user: any, info: any) {
+  handleRequest(error: any, user: any, info: any) {
     // You can throw an exception based on either "info" or "err" arguments
-    if (err || !user) {
-      throw err || new UnauthorizedException(`${info}`);
+    if (error || !user) {
+      throw error || new UnauthorizedException(`${info}`);
     }
     return user;
   }

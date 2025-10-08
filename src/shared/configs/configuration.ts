@@ -3,7 +3,7 @@ export default (): any => ({
   port: process.env.APP_PORT,
   database: {
     host: process.env.DB_HOST,
-    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : undefined,
+    port: process.env.DB_PORT ? Number.parseInt(process.env.DB_PORT, 10) : undefined,
     name: process.env.DB_NAME,
     user: process.env.DB_USER,
     pass: process.env.DB_PASS,
@@ -17,11 +17,11 @@ export default (): any => ({
       process.env.JWT_PRIVATE_KEY_BASE64!,
       'base64',
     ).toString('utf8'),
-    accessTokenExpiresInSec: parseInt(
+    accessTokenExpiresInSec: Number.parseInt(
       process.env.JWT_ACCESS_TOKEN_EXP_IN_SEC!,
       10,
     ),
-    refreshTokenExpiresInSec: parseInt(
+    refreshTokenExpiresInSec: Number.parseInt(
       process.env.JWT_REFRESH_TOKEN_EXP_IN_SEC!,
       10,
     ),

@@ -12,7 +12,7 @@ type ApiPropertyType =
   | string
   | Record<string, any>
   | Type<unknown>
-  | [new (...args: any[]) => any]
+  | [new (...arguments_: any[]) => any]
   | undefined;
 
 export function SwaggerBaseApiResponse<T extends ApiPropertyType>(

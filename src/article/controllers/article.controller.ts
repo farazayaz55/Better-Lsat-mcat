@@ -25,7 +25,7 @@ import {
   BaseApiResponse,
   SwaggerBaseApiResponse,
 } from '../../shared/dtos/base-api-response.dto';
-import { PaginationParamsDto } from '../../shared/dtos/pagination-params.dto';
+import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { ReqContext } from '../../shared/request-context/req-context.decorator';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
@@ -78,7 +78,7 @@ export class ArticleController {
   @UseGuards(JwtAuthGuard)
   async getArticles(
     @ReqContext() ctx: RequestContext,
-    @Query() query: PaginationParamsDto,
+    @Query() query: PaginationParametersDto,
   ): Promise<BaseApiResponse<ArticleOutput[]>> {
     this.logger.log(ctx, `${this.getArticles.name} was called`);
 

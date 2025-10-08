@@ -17,7 +17,7 @@ export class LocalStrategy extends PassportStrategy(Strategy, STRATEGY_LOCAL) {
   ) {
     // Add option passReqToCallback: true to configure strategy to be request-scoped.
     super({
-      usernameField: 'username',
+      usernameField: 'email',
       passwordField: 'password',
       passReqToCallback: true,
     });
@@ -26,14 +26,16 @@ export class LocalStrategy extends PassportStrategy(Strategy, STRATEGY_LOCAL) {
 
   async validate(
     request: Request,
-    username: string,
+    email: string,
     password: string,
   ): Promise<UserAccessTokenClaims> {
     const ctx = createRequestContext(request);
 
     this.logger.log(ctx, `${this.validate.name} was called`);
-
-    const user = await this.authService.validateUser(ctx, username, password);
+    console.log('email', email);
+    console.log('password', password);
+    const user = await this.authService.validateUser(ctx, email, password);
+    console.log('user', user);
     // Passport automatically creates a user object, based on the value we return from the validate() method,
     // and assigns it to the Request object as req.user
     return user;

@@ -25,14 +25,13 @@ export class BaseAclService<Resource> {
   /**
    * create user specific acl object to check ability to perform any action
    */
-  public forActor = (actor: Actor): any => {
-    return {
+  public forActor = (actor: Actor): any => ({
       canDoAction: (action: Action, resource?: Resource) => {
         let canDoAction = false;
 
-        actor.roles.forEach((actorRole) => {
+        for (const actorRole of actor.roles) {
           //If already has access, return
-          if (canDoAction) return true;
+          if (canDoAction)  { true; continue; }
 
           //find all rules for given user role
           const aclRules = this.aclRules.filter(
@@ -40,9 +39,9 @@ export class BaseAclService<Resource> {
           );
 
           //for each rule, check action permission
-          aclRules.forEach((aclRule) => {
+          for (const aclRule of aclRules) {
             //If already has access, return
-            if (canDoAction) return true;
+            if (canDoAction)  { true; continue; }
 
             //check action permission
             const hasActionPermission =
@@ -50,21 +49,20 @@ export class BaseAclService<Resource> {
               aclRule.actions.includes(Action.Manage);
 
             //check for custom `ruleCallback` callback
-            if (!aclRule.ruleCallback) {
-              canDoAction = hasActionPermission;
-            } else {
+            if (aclRule.ruleCallback) {
               if (!resource) {
                 throw new Error('Resource is required for ruleCallback');
               }
 
               canDoAction =
                 hasActionPermission && aclRule.ruleCallback(resource, actor);
+            } else {
+              canDoAction = hasActionPermission;
             }
-          });
-        });
+          }
+        }
 
         return canDoAction;
       },
-    };
-  };
+    });
 }

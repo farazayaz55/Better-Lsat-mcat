@@ -1,12 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { ROLE } from '../../auth/constants/role.constant';
-import { PaginationParamsDto } from '../../shared/dtos/pagination-params.dto';
+import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { UserOutput } from '../dtos/user-output.dto';
 import { UpdateUserInput } from '../dtos/user-update-input.dto';
 import { UserService } from '../services/user.service';
+
 import { UserController } from './user.controller';
 
 describe('UserController', () => {
@@ -39,7 +40,7 @@ describe('UserController', () => {
 
   describe('get Users as a list', () => {
     it('Calls getUsers function', () => {
-      const query: PaginationParamsDto = {
+      const query: PaginationParametersDto = {
         offset: 0,
         limit: 0,
       };

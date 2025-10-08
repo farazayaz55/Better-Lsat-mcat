@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
   IsNotEmpty,
+  IsPhoneNumber,
   IsString,
   Length,
   MaxLength,
@@ -15,6 +16,11 @@ export class RegisterInput {
   @MaxLength(100)
   @IsString()
   name: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsPhoneNumber()
+  phone: string;
 
   @ApiProperty()
   @MaxLength(200)
@@ -33,7 +39,9 @@ export class RegisterInput {
   @MaxLength(100)
   email: string;
 
-  // These keys can only be set by ADMIN user.
+  @ApiProperty()
+  @IsNotEmpty()
   roles: ROLE[] = [ROLE.USER];
+
   isAccountDisabled: boolean;
 }

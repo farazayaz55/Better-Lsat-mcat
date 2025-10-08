@@ -25,3 +25,10 @@ export class UserAccessTokenClaims {
 export class UserRefreshTokenClaims {
   id: number;
 }
+
+export class loginOutput {
+  @Expose()
+  auth: AuthTokenOutput;
+  @Expose()
+  user: UserAccessTokenClaims;
+}

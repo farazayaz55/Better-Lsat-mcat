@@ -5,6 +5,7 @@ import { plainToClass } from 'class-transformer';
 
 import { AppLogger } from '../../shared/logger/logger.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
+import { GhlService } from '../../shared/services/Ghl.service';
 import { UserOutput } from '../../user/dtos/user-output.dto';
 import { UserService } from '../../user/services/user.service';
 import { ROLE } from '../constants/role.constant';
@@ -22,23 +23,20 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly logger: AppLogger,
+    private readonly ghlService: GhlService,
   ) {
     this.logger.setContext(AuthService.name);
   }
 
   async validateUser(
     ctx: RequestContext,
-    username: string,
+    email: string,
     pass: string,
   ): Promise<UserAccessTokenClaims> {
     this.logger.log(ctx, `${this.validateUser.name} was called`);
 
-    // The userService will throw Unauthorized in case of invalid username/password.
-    const user = await this.userService.validateUsernamePassword(
-      ctx,
-      username,
-      pass,
-    );
+    // The userService will throw Unauthorized in case of invalid email/password.
+    const user = await this.userService.validateEmailPassword(ctx, email, pass);
 
     // Prevent disabled users from logging in.
     if (user.isAccountDisabled) {
@@ -50,7 +48,7 @@ export class AuthService {
 
   login(ctx: RequestContext): AuthTokenOutput {
     this.logger.log(ctx, `${this.login.name} was called`);
-
+    console.log('ctx.user', ctx.user);
     return this.getAuthToken(ctx, ctx.user!);
   }
 
@@ -64,7 +62,17 @@ export class AuthService {
     input.roles = [ROLE.USER];
     input.isAccountDisabled = false;
 
+    //also create user in GHL
+    // const ghlUser = await this.ghlService.createUser(input);
+
+    //also update the calendar to add the new user
+    // await this.ghlService.addUserToCalendar(ghlUser);
+
     const registeredUser = await this.userService.createUser(ctx, input);
+
+    //assign order round robin to the user
+    // await this.userService.assignOrderRoundRobin(ctx, registeredUser.id);
+
     return plainToClass(RegisterOutput, registeredUser, {
       excludeExtraneousValues: true,
     });

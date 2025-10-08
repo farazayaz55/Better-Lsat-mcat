@@ -5,6 +5,7 @@ FROM node:20.14.0-bookworm-slim
 RUN apt-get update && apt-get install -y \
   curl \
   git \
+  procps \
   vim \
   wget \
   && apt-get clean \

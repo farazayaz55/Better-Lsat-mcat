@@ -79,7 +79,7 @@ describe('AuthController (e2e)', () => {
     });
 
     it('should fail to register with incorrect username format', async () => {
-      const invalidRegisterInput = { ...registerInput, username: 12345 as any };
+      const invalidRegisterInput = { ...registerInput, username: 12_345 as any };
       await request(app.getHttpServer())
         .post('/auth/register')
         .send(invalidRegisterInput)

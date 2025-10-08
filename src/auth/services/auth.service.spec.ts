@@ -192,12 +192,14 @@ describe('AuthService', () => {
       jest.spyOn(mockedConfigService, 'get').mockImplementation((key) => {
         let value = null;
         switch (key) {
-          case 'jwt.accessTokenExpiresInSec':
+          case 'jwt.accessTokenExpiresInSec': {
             value = accessTokenExpiry;
             break;
-          case 'jwt.refreshTokenExpiresInSec':
+          }
+          case 'jwt.refreshTokenExpiresInSec': {
             value = refreshTokenExpiry;
             break;
+          }
         }
         return value;
       });

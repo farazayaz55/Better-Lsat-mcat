@@ -16,12 +16,15 @@ describe('createRequestContext function', () => {
     user,
     header: jest.fn().mockImplementation((header) => {
       switch (header) {
-        case REQUEST_ID_TOKEN_HEADER:
+        case REQUEST_ID_TOKEN_HEADER: {
           return '123';
-        case FORWARDED_FOR_TOKEN_HEADER:
+        }
+        case FORWARDED_FOR_TOKEN_HEADER: {
           return 'forwardedIP';
-        default:
+        }
+        default: {
           break;
+        }
       }
     }),
   } as unknown) as Request;

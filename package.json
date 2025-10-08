@@ -1,15 +1,11 @@
 {
-  "name": "nestjs-starter-rest-api",
+  "name": "better-lsat-mcat",
   "private": true,
   "version": "1.0.0",
-  "description": "NestJS Starter REST API Repository",
+  "description": "NestJS mcat_lsat",
   "license": "MIT",
   "contributors": [
-    "Yash Murty <yashmurty@gmail.com> (https://github.com/yashmurty)",
-    "S M Asad Rahman<asad.rahman@monstar-lab.com> (https://github.com/asad-mlbd)",
-    "Tanveer Hassan <mailtanveerhassan@gmail.com> (https://github.com/war1oc)",
-    "Saad Bin Amjad <saadbinamjad@gmail.com> (https://github.com/Saad-Amjad)",
-    "Sivan Payyadakath <sivanp77@gmail.com > (https://github.com/sivanpayyadakath)"
+    "Faraz Ud Din"
   ],
   "scripts": {
     "prebuild": "rimraf dist",
@@ -52,6 +48,7 @@
     "@nestjs/swagger": "^7.4.2",
     "@nestjs/typeorm": "^10.0.2",
     "@types/uuid": "^9.0.8",
+    "axios": "^1.12.2",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
@@ -76,6 +73,7 @@
     "@nestjs/cli": "^10.4.9",
     "@nestjs/schematics": "^10.2.3",
     "@nestjs/testing": "^10.4.19",
+    "@types/axios": "^0.14.4",
     "@types/bcrypt": "^5.0.2",
     "@types/express": "^4.17.23",
     "@types/jest": "^29.5.14",
@@ -88,10 +86,11 @@
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
+    "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-security": "^3.0.1",
     "eslint-plugin-simple-import-sort": "^12.1.1",
-    "eslint-plugin-sonarjs": "^3.0.5",
+    "eslint-plugin-sonarjs": "^2.0.4",
     "eslint-plugin-unicorn": "^48.0.1",
     "husky": "^9.1.7",
     "jest": "^29.7.0",
@@ -131,13 +130,9 @@
       "src/.*/strategies/.*",
       "src/shared/configs",
       "src/shared/exceptions",
-
       "src/shared/request-context"
-
-
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
-
   }
 }
