@@ -138,6 +138,5 @@ module.exports = {
       { accessibility: 'explicit' },
     ],
     '@typescript-eslint/interface-name-prefix': 'off',
-    'simple-import-sort/imports': 'error',
   },
 };
