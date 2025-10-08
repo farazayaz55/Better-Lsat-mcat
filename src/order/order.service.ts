@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
+
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
 import {
-  WooCommerceOrder,
-  WooCommerceOrderResponse,
+  IWooCommerceOrder,
+  IWooCommerceOrderResponse,
 } from '../shared/services/interfaces/woocommerce.order.interface';
 import { WooCommerceService } from '../shared/services/WooCommerce.service';
 import { CreateCustomerInput } from '../user/dtos/customer-create-input.dto';
@@ -79,13 +80,13 @@ export class OrderService {
   async generateWooCommerceUrl(
     ctx: RequestContext,
     orderId: number | undefined,
-  ): Promise<WooCommerceOrderResponse | undefined> {
+  ): Promise<IWooCommerceOrderResponse | undefined> {
     if (!orderId) {
       this.logger.error(ctx, 'Invalid id passed');
       return;
     }
     const order = await this.findOne(orderId);
-    let orderData: WooCommerceOrder = {
+    let orderData: IWooCommerceOrder = {
       payment_method: 'cod', // or dynamically from your order/payment choice
       payment_method_title: 'Cash on Delivery',
       set_paid: false,
