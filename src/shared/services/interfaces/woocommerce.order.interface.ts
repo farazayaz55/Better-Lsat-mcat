@@ -1,22 +1,22 @@
 // WooCommerce Order Interfaces
 
-export interface WooCommerceOrder {
+export interface IWooCommerceOrder {
   payment_method: string; // e.g., "bacs", "cheque", "cod", "paypal"
   payment_method_title?: string; // e.g., "Direct Bank Transfer"
   set_paid?: boolean; // true if already paid
 
-  billing: WooCommerceAddress; // required billing details
-  shipping?: WooCommerceAddress; // optional shipping details
+  billing: IWooCommerceAddress; // required billing details
+  shipping?: IWooCommerceAddress; // optional shipping details
 
-  line_items: WooCommerceLineItem[]; // products added to order
-  shipping_lines?: WooCommerceShippingLine[]; // shipping methods
+  lineItems: IWooCommerceLineItem[]; // products added to order
+  shippingLines?: IWooCommerceShippingLine[]; // shipping methods
 
-  customer_id?: number; // WP user ID (optional if guest)
-  customer_note?: string; // any note attached
-  transaction_id?: string; // for payment gateway tracking
-  coupon_lines?: WooCommerceCouponLine[]; // applied coupons
-  fee_lines?: WooCommerceFeeLine[]; // custom fees
-  meta_data?: WooCommerceMetaData[]; // custom metadata
+  customerId?: number; // WP user ID (optional if guest)
+  customerNote?: string; // any note attached
+  transactionId?: string; // for payment gateway tracking
+  couponLines?: IWooCommerceCouponLine[]; // applied coupons
+  feeLines?: IWooCommerceFeeLine[]; // custom fees
+  metaData?: IWooCommerceMetaData[]; // custom metadata
 }
 
 export interface WooCommerceOrderResponse {

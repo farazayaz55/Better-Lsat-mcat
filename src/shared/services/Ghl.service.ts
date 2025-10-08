@@ -2,11 +2,8 @@ import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 
 import { RegisterInput } from '../../auth/dtos/auth-register-input.dto';
-import { OrderInput } from '../../order/dto/order-input.dto';
-import { ItemOutput, OrderOutput } from '../../order/dto/order-output.dto';
 import { ItemInput } from '../../order/interfaces/item.interface';
 import { UserInput } from '../../order/interfaces/user.interface';
-import { UserOutput } from '../../user/dtos/user-output.dto';
 import { UserService } from '../../user/services/user.service';
 import { RequestContext } from '../request-context/request-context.dto';
 
@@ -182,7 +179,7 @@ export class GhlService {
       calendar.teamMembers.push({ userId: user.id });
 
       console.log(calendar);
-      const response = await axios
+      await axios
         .put(
           `${this.baseUrl}/calendars/${process.env.GHL_CALENDAR_ID}`,
           calendar,

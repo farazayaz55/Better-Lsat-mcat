@@ -1,7 +1,7 @@
 /**
  * The actor who is perfoming the action
  */
-export interface Actor {
+export interface IActor {
   id: number;
 
   roles: string[];

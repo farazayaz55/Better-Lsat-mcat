@@ -217,14 +217,6 @@ export class UserService {
   }
 
   async findEmployeesByServiceId(serviceId: number): Promise<User[]> {
-    // Step 1: Check all users in database
-    const allUsers = await this.repository.find();
-
-    // Step 2: Check users with USER role
-    const usersWithUserRole = await this.repository.find({
-      where: { roles: ROLE.USER },
-    });
-
     // Step 3: Check users with USER role and not disabled
     const activeUsers = await this.repository.find({
       where: {
@@ -257,7 +249,8 @@ export class UserService {
       const serviceIdsString = user.serviceIds
         ? user.serviceIds.toString()
         : 'null';
-      const matches = serviceIdsString.includes(serviceId.toString());
+      // Check if user has the required service ID
+      serviceIdsString.includes(serviceId.toString());
     }
 
     return result;

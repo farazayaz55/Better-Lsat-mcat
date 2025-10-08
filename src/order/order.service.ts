@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import axios from 'axios';
 import { plainToInstance } from 'class-transformer';
-
-import { ROLE } from '../auth/constants/role.constant';
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
@@ -13,7 +10,6 @@ import {
 import { WooCommerceService } from '../shared/services/WooCommerce.service';
 import { CreateCustomerInput } from '../user/dtos/customer-create-input.dto';
 import { User } from '../user/entities/user.entity';
-import { UserRepository } from '../user/repositories/user.repository';
 import { UserService } from '../user/services/user.service';
 
 import { OrderInput } from './dto/order-input.dto';
@@ -169,7 +165,7 @@ export class OrderService {
     return await this.repository.findOne({ where: { id } });
   }
 
-  update(id: number, updateOrderDto: OrderInput) {
+  update(id: number, _updateOrderDto: OrderInput) {
     return `This action updates a #${id} order`;
   }
 
