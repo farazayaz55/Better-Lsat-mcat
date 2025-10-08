@@ -50,12 +50,14 @@ export class AllExceptionsFilter<T> implements ExceptionFilter {
       localizedMessage = exception.localizedMessage
         ? exception.localizedMessage[acceptedLanguage]
         : undefined;
-      details = exception.details || exception.getResponse();
+      details =
+        exception.details ||
+        (exception.getResponse() as string | Record<string, unknown>);
     } else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       errorName = exception.constructor.name;
       message = exception.message;
-      details = exception.getResponse();
+      details = exception.getResponse() as string | Record<string, unknown>;
     } else if (exception instanceof Error) {
       errorName = exception.constructor.name;
       message = exception.message;

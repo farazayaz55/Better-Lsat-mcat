@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 
 import { Action } from '../../shared/acl/action.constant';
-import { Actor } from '../../shared/acl/actor.constant';
+import { IActor } from '../../shared/acl/actor.constant';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { User } from '../../user/entities/user.entity';
@@ -35,13 +35,13 @@ export class ArticleService {
 
     const article = plainToInstance(Article, input);
 
-    const actor: Actor = ctx.user!;
+    const actor: IActor = ctx.user!;
 
     const user = await this.userService.getUserById(ctx, actor.id);
 
     const isAllowed = this.aclService
       .forActor(actor)
-      .canDoAction(Action.Create, article);
+      .canDoAction(Action.CREATE, article);
     if (!isAllowed) {
       throw new UnauthorizedException();
     }
@@ -63,9 +63,9 @@ export class ArticleService {
   ): Promise<{ articles: ArticleOutput[]; count: number }> {
     this.logger.log(ctx, `${this.getArticles.name} was called`);
 
-    const actor: Actor = ctx.user!;
+    const actor: IActor = ctx.user!;
 
-    const isAllowed = this.aclService.forActor(actor).canDoAction(Action.List);
+    const isAllowed = this.aclService.forActor(actor).canDoAction(Action.LIST);
     if (!isAllowed) {
       throw new UnauthorizedException();
     }
@@ -90,14 +90,14 @@ export class ArticleService {
   ): Promise<ArticleOutput> {
     this.logger.log(ctx, `${this.getArticleById.name} was called`);
 
-    const actor: Actor = ctx.user!;
+    const actor: IActor = ctx.user!;
 
     this.logger.log(ctx, `calling ${ArticleRepository.name}.getById`);
     const article = await this.repository.getById(id);
 
     const isAllowed = this.aclService
       .forActor(actor)
-      .canDoAction(Action.Read, article);
+      .canDoAction(Action.READ, article);
     if (!isAllowed) {
       throw new UnauthorizedException();
     }
@@ -117,11 +117,11 @@ export class ArticleService {
     this.logger.log(ctx, `calling ${ArticleRepository.name}.getById`);
     const article = await this.repository.getById(articleId);
 
-    const actor: Actor = ctx.user!;
+    const actor: IActor = ctx.user!;
 
     const isAllowed = this.aclService
       .forActor(actor)
-      .canDoAction(Action.Update, article);
+      .canDoAction(Action.UPDATE, article);
     if (!isAllowed) {
       throw new UnauthorizedException();
     }
@@ -145,11 +145,11 @@ export class ArticleService {
     this.logger.log(ctx, `calling ${ArticleRepository.name}.getById`);
     const article = await this.repository.getById(id);
 
-    const actor: Actor = ctx.user!;
+    const actor: IActor = ctx.user!;
 
     const isAllowed = this.aclService
       .forActor(actor)
-      .canDoAction(Action.Delete, article);
+      .canDoAction(Action.DELETE, article);
     if (!isAllowed) {
       throw new UnauthorizedException();
     }

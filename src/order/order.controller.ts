@@ -23,7 +23,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   BaseApiErrorResponse,
-  SwaggerBaseApiResponse,
+  swaggerBaseApiResponse,
 } from '../shared/dtos/base-api-response.dto';
 import { AppLogger } from '../shared/logger/logger.service';
 import { ReqContext } from '../shared/request-context/req-context.decorator';
@@ -57,7 +57,7 @@ export class OrderController {
   @HttpCode(HttpStatus.OK)
   @ApiResponse({
     status: HttpStatus.CREATED,
-    type: SwaggerBaseApiResponse(OrderOutput),
+    type: swaggerBaseApiResponse(OrderOutput),
   })
   // @UseInterceptors(ClassSerializerInterceptor)
   // @ApiBearerAuth()
@@ -91,7 +91,7 @@ export class OrderController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse([OrderOutput]),
+    type: swaggerBaseApiResponse([OrderOutput]),
   })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
@@ -131,7 +131,7 @@ export class OrderController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(OrderOutput),
+    type: swaggerBaseApiResponse(OrderOutput),
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
@@ -150,7 +150,7 @@ export class OrderController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(OrderOutput),
+    type: swaggerBaseApiResponse(OrderOutput),
   })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()

@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 
 import {
-  WooCommerceOrder,
-  WooCommerceOrderResponse,
+  IWooCommerceOrder,
+  IWooCommerceOrderResponse,
 } from './interfaces/woocommerce.order.interface';
 
 @Injectable()
@@ -13,8 +13,8 @@ export class WooCommerceService {
   private consumerSecret = process.env.WOO_CONSUMER_SECRET;
 
   async createOrder(
-    orderData: WooCommerceOrder,
-  ): Promise<WooCommerceOrderResponse> {
+    orderData: IWooCommerceOrder,
+  ): Promise<IWooCommerceOrderResponse> {
     const response = await axios.post(`${this.baseUrl}/orders`, orderData, {
       auth: {
         username: this.consumerKey ?? '',
@@ -24,7 +24,7 @@ export class WooCommerceService {
     return response.data;
   }
 
-  async getOrders(): Promise<WooCommerceOrderResponse[]> {
+  async getOrders(): Promise<IWooCommerceOrderResponse[]> {
     const response = await axios.get(
       `${this.baseUrl}/orders?status=processing`,
       {

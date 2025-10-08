@@ -23,7 +23,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import {
   BaseApiErrorResponse,
   BaseApiResponse,
-  SwaggerBaseApiResponse,
+  swaggerBaseApiResponse,
 } from '../../shared/dtos/base-api-response.dto';
 import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
@@ -52,7 +52,7 @@ export class ArticleController {
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    type: SwaggerBaseApiResponse(ArticleOutput),
+    type: swaggerBaseApiResponse(ArticleOutput),
   })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
@@ -71,7 +71,7 @@ export class ArticleController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse([ArticleOutput]),
+    type: swaggerBaseApiResponse([ArticleOutput]),
   })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
@@ -97,7 +97,7 @@ export class ArticleController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(ArticleOutput),
+    type: swaggerBaseApiResponse(ArticleOutput),
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
@@ -122,7 +122,7 @@ export class ArticleController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(ArticleOutput),
+    type: swaggerBaseApiResponse(ArticleOutput),
   })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()

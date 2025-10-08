@@ -1,13 +1,13 @@
 import { ROLE } from './../../auth/constants/role.constant';
 import { Action } from './action.constant';
-import { Actor } from './actor.constant';
+import { IActor } from './actor.constant';
 
 /**
  * Custom rule callback definition
  */
 export type RuleCallback<Resource> = (
   resource: Resource,
-  actor: Actor,
+  actor: IActor,
 ) => boolean;
 
 /**

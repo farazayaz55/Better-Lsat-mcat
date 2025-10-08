@@ -8,18 +8,18 @@ export interface IWooCommerceOrder {
   billing: IWooCommerceAddress; // required billing details
   shipping?: IWooCommerceAddress; // optional shipping details
 
-  lineItems: IWooCommerceLineItem[]; // products added to order
-  shippingLines?: IWooCommerceShippingLine[]; // shipping methods
+  line_items: IWooCommerceLineItem[]; // products added to order
+  shipping_lines?: IWooCommerceShippingLine[]; // shipping methods
 
-  customerId?: number; // WP user ID (optional if guest)
-  customerNote?: string; // any note attached
+  customer_id?: number; // WP user ID (optional if guest)
+  customer_note?: string; // any note attached
   transactionId?: string; // for payment gateway tracking
   couponLines?: IWooCommerceCouponLine[]; // applied coupons
   feeLines?: IWooCommerceFeeLine[]; // custom fees
   metaData?: IWooCommerceMetaData[]; // custom metadata
 }
 
-export interface WooCommerceOrderResponse {
+export interface IWooCommerceOrderResponse {
   id: number;
   parent_id: number;
   number: string;
@@ -49,8 +49,8 @@ export interface WooCommerceOrderResponse {
   customer_user_agent: string;
   customer_note: string;
 
-  billing: WooCommerceAddress;
-  shipping: WooCommerceAddress;
+  billing: IWooCommerceAddress;
+  shipping: IWooCommerceAddress;
 
   payment_method: string;
   payment_method_title: string;
@@ -63,19 +63,19 @@ export interface WooCommerceOrderResponse {
 
   cart_hash: string;
 
-  meta_data: WooCommerceResponseMetaData[];
+  meta_data: IWooCommerceResponseMetaData[];
 
-  line_items: WooCommerceResponseLineItem[];
-  tax_lines: WooCommerceTaxLine[];
-  shipping_lines: WooCommerceResponseShippingLine[];
-  fee_lines: WooCommerceFeeLine[];
-  coupon_lines: WooCommerceCouponLine[];
-  refunds: WooCommerceRefund[];
+  line_items: IWooCommerceResponseLineItem[];
+  tax_lines: IWooCommerceTaxLine[];
+  shipping_lines: IWooCommerceResponseShippingLine[];
+  fee_lines: IWooCommerceFeeLine[];
+  coupon_lines: IWooCommerceCouponLine[];
+  refunds: IWooCommerceRefund[];
 
-  _links: WooCommerceLinks;
+  _links: IWooCommerceLinks;
 }
 
-export interface WooCommerceResponseLineItem {
+export interface IWooCommerceResponseLineItem {
   id: number;
   name: string;
   product_id: number;
@@ -86,23 +86,23 @@ export interface WooCommerceResponseLineItem {
   subtotal_tax: string;
   total: string;
   total_tax: string;
-  taxes: WooCommerceTax[];
-  meta_data: WooCommerceResponseMetaData[];
+  taxes: IWooCommerceTax[];
+  meta_data: IWooCommerceResponseMetaData[];
   sku: string;
   price: number;
 }
 
-export interface WooCommerceResponseShippingLine {
+export interface IWooCommerceResponseShippingLine {
   id: number;
   method_title: string;
   method_id: string;
   total: string;
   total_tax: string;
-  taxes: WooCommerceTax[];
-  meta_data: WooCommerceResponseMetaData[];
+  taxes: IWooCommerceTax[];
+  meta_data: IWooCommerceResponseMetaData[];
 }
 
-export interface WooCommerceTaxLine {
+export interface IWooCommerceTaxLine {
   id: number;
   rate_code: string;
   rate_id: number;
@@ -110,35 +110,35 @@ export interface WooCommerceTaxLine {
   compound: boolean;
   tax_total: string;
   shipping_tax_total: string;
-  meta_data: WooCommerceResponseMetaData[];
+  meta_data: IWooCommerceResponseMetaData[];
 }
 
-export interface WooCommerceResponseMetaData {
+export interface IWooCommerceResponseMetaData {
   id: number;
   key: string;
   value: any;
 }
 
-export interface WooCommerceTax {
+export interface IWooCommerceTax {
   id: number;
   total: string;
   subtotal: string;
 }
 
-export interface WooCommerceRefund {
+export interface IWooCommerceRefund {
   id: number;
   reason?: string;
   total: string;
 }
 
-export interface WooCommerceLinks {
+export interface IWooCommerceLinks {
   self: { href: string }[];
   collection: { href: string }[];
 }
 
 // Reusable sub-types
 
-export interface WooCommerceAddress {
+export interface IWooCommerceAddress {
   first_name: string;
   last_name: string;
   company?: string;
@@ -152,35 +152,35 @@ export interface WooCommerceAddress {
   phone?: string;
 }
 
-export interface WooCommerceLineItem {
+export interface IWooCommerceLineItem {
   product_id: number; // WooCommerce product ID
   variation_id?: number;
   quantity: number;
   total?: string; // optional, WooCommerce can calculate
   subtotal?: string;
-  meta_data?: WooCommerceMetaData[];
+  meta_data?: IWooCommerceMetaData[];
 }
 
-export interface WooCommerceShippingLine {
+export interface IWooCommerceShippingLine {
   method_id: string; // e.g., "flat_rate"
   method_title: string; // e.g., "Flat Rate"
   total: string; // shipping cost
 }
 
-export interface WooCommerceCouponLine {
+export interface IWooCommerceCouponLine {
   code: string; // coupon code
   discount?: string;
   discount_tax?: string;
 }
 
-export interface WooCommerceFeeLine {
+export interface IWooCommerceFeeLine {
   name: string; // fee name
   total: string;
   tax_class?: string;
   tax_status?: string;
 }
 
-export interface WooCommerceMetaData {
+export interface IWooCommerceMetaData {
   key: string;
   value: any;
 }

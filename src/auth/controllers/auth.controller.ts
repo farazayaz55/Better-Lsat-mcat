@@ -14,7 +14,7 @@ import { DataSource } from 'typeorm';
 import {
   BaseApiErrorResponse,
   BaseApiResponse,
-  SwaggerBaseApiResponse,
+  swaggerBaseApiResponse,
 } from '../../shared/dtos/base-api-response.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { ReqContext } from '../../shared/request-context/req-context.decorator';
@@ -48,7 +48,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(loginOutput),
+    type: swaggerBaseApiResponse(loginOutput),
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
@@ -74,7 +74,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    type: SwaggerBaseApiResponse(RegisterOutput),
+    type: swaggerBaseApiResponse(RegisterOutput),
   })
   async registerLocal(
     @ReqContext() ctx: RequestContext,
@@ -132,7 +132,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(AuthTokenOutput),
+    type: swaggerBaseApiResponse(AuthTokenOutput),
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,

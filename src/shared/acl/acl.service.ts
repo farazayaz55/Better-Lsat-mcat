@@ -25,44 +25,52 @@ export class BaseAclService<Resource> {
   /**
    * create user specific acl object to check ability to perform any action
    */
-  public forActor = (actor: IActor): { canDoAction: (action: Action, resource?: Resource) => boolean } => ({
-      canDoAction: (action: Action, resource?: Resource) => {
-        let canDoAction = false;
+  public forActor = (
+    actor: IActor,
+  ): { canDoAction: (action: Action, resource?: Resource) => boolean } => ({
+    canDoAction: (action: Action, resource?: Resource) => {
+      let canDoAction = false;
 
-        for (const actorRole of actor.roles) {
-          //If already has access, return
-          if (canDoAction)  { true; continue; }
-
-          //find all rules for given user role
-          const aclRules = this.aclRules.filter(
-            (rule) => rule.role === actorRole,
-          );
-
-          //for each rule, check action permission
-          for (const aclRule of aclRules) {
-            //If already has access, return
-            if (canDoAction)  { true; continue; }
-
-            //check action permission
-            const hasActionPermission =
-              aclRule.actions.includes(action) ||
-              aclRule.actions.includes(Action.Manage);
-
-            //check for custom `ruleCallback` callback
-            if (aclRule.ruleCallback) {
-              if (!resource) {
-                throw new Error('Resource is required for ruleCallback');
-              }
-
-              canDoAction =
-                hasActionPermission && aclRule.ruleCallback(resource, actor);
-            } else {
-              canDoAction = hasActionPermission;
-            }
-          }
+      for (const actorRole of actor.roles) {
+        //If already has access, return
+        if (canDoAction) {
+          true;
+          continue;
         }
 
-        return canDoAction;
-      },
-    });
+        //find all rules for given user role
+        const aclRules = this.aclRules.filter(
+          (rule) => rule.role === actorRole,
+        );
+
+        //for each rule, check action permission
+        for (const aclRule of aclRules) {
+          //If already has access, return
+          if (canDoAction) {
+            true;
+            continue;
+          }
+
+          //check action permission
+          const hasActionPermission =
+            aclRule.actions.includes(action) ||
+            aclRule.actions.includes(Action.MANAGE);
+
+          //check for custom `ruleCallback` callback
+          if (aclRule.ruleCallback) {
+            if (!resource) {
+              throw new Error('Resource is required for ruleCallback');
+            }
+
+            canDoAction =
+              hasActionPermission && aclRule.ruleCallback(resource, actor);
+          } else {
+            canDoAction = hasActionPermission;
+          }
+        }
+      }
+
+      return canDoAction;
+    },
+  });
 }

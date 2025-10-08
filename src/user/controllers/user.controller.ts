@@ -24,7 +24,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import {
   BaseApiErrorResponse,
   BaseApiResponse,
-  SwaggerBaseApiResponse,
+  swaggerBaseApiResponse,
 } from '../../shared/dtos/base-api-response.dto';
 import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
@@ -53,7 +53,7 @@ export class UserController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(UserOutput),
+    type: swaggerBaseApiResponse(UserOutput),
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
@@ -75,7 +75,7 @@ export class UserController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse([UserOutput]),
+    type: swaggerBaseApiResponse([UserOutput]),
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
@@ -108,7 +108,7 @@ export class UserController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(UserOutput),
+    type: swaggerBaseApiResponse(UserOutput),
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
@@ -132,7 +132,7 @@ export class UserController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: SwaggerBaseApiResponse(UserOutput),
+    type: swaggerBaseApiResponse(UserOutput),
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,

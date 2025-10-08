@@ -14,13 +14,13 @@ import { UserRepository } from '../repositories/user.repository';
 
 @Injectable()
 export class UserService {
-  constructor(
+  public constructor(
     private readonly repository: UserRepository,
     private readonly logger: AppLogger,
   ) {
     this.logger.setContext(UserService.name);
   }
-  async createUser(
+  public async createUser(
     ctx: RequestContext,
     input: CreateUserInput,
   ): Promise<UserOutput> {
@@ -38,7 +38,7 @@ export class UserService {
     });
   }
 
-  async getOrCreateCustomer(
+  public async getOrCreateCustomer(
     ctx: RequestContext,
     input: CreateCustomerInput,
   ): Promise<User> {
@@ -60,7 +60,7 @@ export class UserService {
   /**
    * adding customer
    */
-  async createCustomer(
+  public async createCustomer(
     ctx: RequestContext,
     input: CreateCustomerInput,
   ): Promise<UserOutput> {
@@ -78,7 +78,7 @@ export class UserService {
     });
   }
 
-  async validateEmailPassword(
+  public async validateEmailPassword(
     ctx: RequestContext,
     email: string,
     pass: string,
@@ -87,7 +87,9 @@ export class UserService {
 
     this.logger.log(ctx, `calling ${UserRepository.name}.findOne`);
     const user = await this.repository.findOne({ where: { email } });
-    if (!user) {throw new UnauthorizedException();}
+    if (!user) {
+      throw new UnauthorizedException();
+    }
 
     console.log('Found user:', {
       id: user.id,
@@ -103,14 +105,16 @@ export class UserService {
     }
 
     const match = await compare(pass, user.password);
-    if (!match) {throw new UnauthorizedException();}
+    if (!match) {
+      throw new UnauthorizedException();
+    }
 
     return plainToInstance(UserOutput, user, {
       excludeExtraneousValues: true,
     });
   }
 
-  async getUsers(
+  public async getUsers(
     ctx: RequestContext,
     limit: number,
     offset: number,
@@ -131,7 +135,7 @@ export class UserService {
     return { users: usersOutput, count };
   }
 
-  async findById(ctx: RequestContext, id: number): Promise<UserOutput> {
+  public async findById(ctx: RequestContext, id: number): Promise<UserOutput> {
     this.logger.log(ctx, `${this.findById.name} was called`);
 
     this.logger.log(ctx, `calling ${UserRepository.name}.findOne`);
@@ -142,7 +146,7 @@ export class UserService {
     });
   }
 
-  async getUserById(ctx: RequestContext, id: number): Promise<UserOutput> {
+  public async getUserById(ctx: RequestContext, id: number): Promise<UserOutput> {
     this.logger.log(ctx, `${this.getUserById.name} was called`);
 
     this.logger.log(ctx, `calling ${UserRepository.name}.getById`);
@@ -153,7 +157,7 @@ export class UserService {
     });
   }
 
-  async findByUsername(
+  public async findByUsername(
     ctx: RequestContext,
     username: string,
   ): Promise<UserOutput> {
@@ -167,7 +171,7 @@ export class UserService {
     });
   }
 
-  async updateUser(
+  public async updateUser(
     ctx: RequestContext,
     userId: number,
     input: UpdateUserInput,
@@ -196,27 +200,7 @@ export class UserService {
     });
   }
 
-  // Employee-specific methods (USER role = Employee)
-  async findAllEmployees(): Promise<User[]> {
-    return await this.repository.find({
-      where: {
-        roles: ROLE.USER,
-        isAccountDisabled: false,
-      },
-    });
-  }
-
-  async findEmployeeById(id: number): Promise<User | null> {
-    return await this.repository.findOne({
-      where: {
-        id,
-        roles: ROLE.USER,
-        isAccountDisabled: false,
-      },
-    });
-  }
-
-  async findEmployeesByServiceId(serviceId: number): Promise<User[]> {
+  public async findEmployeesByServiceId(serviceId: number): Promise<User[]> {
     // Step 3: Check users with USER role and not disabled
     const activeUsers = await this.repository.find({
       where: {
@@ -256,10 +240,10 @@ export class UserService {
     return result;
   }
 
-  async assignOrderRoundRobin(
+  public async assignOrderRoundRobin(
     ctx: RequestContext,
     serviceId: number,
-  ): Promise<User | null> {
+  ): Promise<User | undefined> {
     const availableEmployees = await this.findEmployeesByServiceId(serviceId);
 
     if (availableEmployees.length === 0) {
@@ -267,7 +251,7 @@ export class UserService {
         ctx,
         `No employees available for service ID: ${serviceId}`,
       );
-      return null;
+      return undefined;
     }
 
     // Sort by last assigned order count to implement round-robin
@@ -285,7 +269,7 @@ export class UserService {
     return selectedEmployee;
   }
 
-  async createEmployee(employeeData: Partial<User>): Promise<User> {
+  public async createEmployee(employeeData: Partial<User>): Promise<User> {
     const employee = this.repository.create({
       ...employeeData,
       roles: [ROLE.USER],
