@@ -52,13 +52,28 @@ module.exports = {
       { selector: 'class', format: ['PascalCase'] },
       { selector: 'interface', format: ['PascalCase'], prefix: ['I'] },
       // Allow interfaces without I prefix for external APIs
-      { selector: 'interface', format: ['PascalCase'], filter: { regex: '^(Actor|WooCommerceOrder|WooCommerceOrderResponse|WooCommerceResponseLineItem|WooCommerceResponseShippingLine|WooCommerceTaxLine|WooCommerceResponseMetaData|WooCommerceTax|WooCommerceRefund|WooCommerceLinks|WooCommerceAddress|WooCommerceLineItem|WooCommerceShippingLine|WooCommerceCouponLine|WooCommerceFeeLine|WooCommerceMetaData)$', match: true } },
+      {
+        selector: 'interface',
+        format: ['PascalCase'],
+        filter: {
+          regex:
+            '^(Actor|WooCommerceOrder|WooCommerceOrderResponse|WooCommerceResponseLineItem|WooCommerceResponseShippingLine|WooCommerceTaxLine|WooCommerceResponseMetaData|WooCommerceTax|WooCommerceRefund|WooCommerceLinks|WooCommerceAddress|WooCommerceLineItem|WooCommerceShippingLine|WooCommerceCouponLine|WooCommerceFeeLine|WooCommerceMetaData)$',
+          match: true,
+        },
+      },
       { selector: 'function', format: ['camelCase'] },
       { selector: 'variable', format: ['camelCase', 'UPPER_CASE'] },
       { selector: 'enum', format: ['PascalCase'] },
       { selector: 'enumMember', format: ['UPPER_CASE'] },
       // Allow PascalCase enum members for specific enums
-      { selector: 'enumMember', format: ['PascalCase'], filter: { regex: '^(Create|Read|Update|Delete|Manage|List)$', match: true } },
+      {
+        selector: 'enumMember',
+        format: ['PascalCase'],
+        filter: {
+          regex: '^(Create|Read|Update|Delete|Manage|List)$',
+          match: true,
+        },
+      },
       { selector: 'typeAlias', format: ['PascalCase'] },
       { selector: 'property', format: ['camelCase'] },
       { selector: 'method', format: ['camelCase'] },
