@@ -2,12 +2,12 @@ import { HttpException } from '@nestjs/common';
 
 export class BaseApiException extends HttpException {
   public localizedMessage: Record<string, string> | undefined;
-  public details: string | Record<string, any> | undefined;
+  public details: string | Record<string, unknown> | undefined;
 
   constructor(
     message: string,
     status: number,
-    details?: string | Record<string, any>,
+    details?: string | Record<string, unknown>,
     localizedMessage?: Record<string, string>,
   ) {
     // Calling parent constructor of base Exception class.

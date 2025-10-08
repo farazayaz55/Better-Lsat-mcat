@@ -1,7 +1,7 @@
 import { ROLE } from './../../auth/constants/role.constant';
 import { AclRule, RuleCallback } from './acl-rule.constant';
 import { Action } from './action.constant';
-import { Actor } from './actor.constant';
+import { IActor } from './actor.constant';
 
 export class BaseAclService<Resource> {
   /**
@@ -25,7 +25,7 @@ export class BaseAclService<Resource> {
   /**
    * create user specific acl object to check ability to perform any action
    */
-  public forActor = (actor: Actor): any => ({
+  public forActor = (actor: IActor): { canDoAction: (action: Action, resource?: Resource) => boolean } => ({
       canDoAction: (action: Action, resource?: Resource) => {
         let canDoAction = false;
 

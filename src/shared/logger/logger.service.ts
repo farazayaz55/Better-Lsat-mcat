@@ -21,7 +21,7 @@ export class AppLogger {
   error(
     ctx: RequestContext,
     message: string,
-    meta?: Record<string, any>,
+    meta?: Record<string, unknown>,
   ): Logger {
     const timestamp = new Date().toISOString();
 
@@ -37,7 +37,7 @@ export class AppLogger {
   warn(
     ctx: RequestContext,
     message: string,
-    meta?: Record<string, any>,
+    meta?: Record<string, unknown>,
   ): Logger {
     const timestamp = new Date().toISOString();
 
@@ -53,7 +53,7 @@ export class AppLogger {
   debug(
     ctx: RequestContext,
     message: string,
-    meta?: Record<string, any>,
+    meta?: Record<string, unknown>,
   ): Logger {
     const timestamp = new Date().toISOString();
 
@@ -69,7 +69,7 @@ export class AppLogger {
   verbose(
     ctx: RequestContext,
     message: string,
-    meta?: Record<string, any>,
+    meta?: Record<string, unknown>,
   ): Logger {
     const timestamp = new Date().toISOString();
 
@@ -85,7 +85,7 @@ export class AppLogger {
   log(
     ctx: RequestContext,
     message: string,
-    meta?: Record<string, any>,
+    meta?: Record<string, unknown>,
   ): Logger {
     const timestamp = new Date().toISOString();
 

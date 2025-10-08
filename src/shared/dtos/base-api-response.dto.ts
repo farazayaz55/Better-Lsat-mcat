@@ -5,17 +5,17 @@ export class BaseApiResponse<T> {
   public data: T; // Swagger Decorator is added in the extended class below, since that will override this one.
 
   @ApiProperty({ type: Object })
-  public meta: any;
+  public meta: Record<string, unknown>;
 }
 
 type ApiPropertyType =
   | string
-  | Record<string, any>
+  | Record<string, unknown>
   | Type<unknown>
-  | [new (...arguments_: any[]) => any]
+  | [new (...arguments_: unknown[]) => unknown]
   | undefined;
 
-export function SwaggerBaseApiResponse<T extends ApiPropertyType>(
+export function swaggerBaseApiResponse<T extends ApiPropertyType>(
   type: T,
 ): typeof BaseApiResponse {
   class ExtendedBaseApiResponse<T> extends BaseApiResponse<T> {
@@ -26,7 +26,7 @@ export function SwaggerBaseApiResponse<T extends ApiPropertyType>(
   // will overwrite all previous definitions. i.e., Swagger will have all response types as the same one.
   const isAnArray = Array.isArray(type) ? ' [ ] ' : '';
   Object.defineProperty(ExtendedBaseApiResponse, 'name', {
-    value: `SwaggerBaseApiResponseFor ${type} ${isAnArray}`,
+    value: `swaggerBaseApiResponseFor ${type} ${isAnArray}`,
   });
 
   return ExtendedBaseApiResponse;

@@ -1,4 +1,23 @@
-export default (): any => ({
+interface AppConfig {
+  env: string | undefined;
+  port: string | undefined;
+  database: {
+    host: string | undefined;
+    port: number | undefined;
+    name: string | undefined;
+    user: string | undefined;
+    pass: string | undefined;
+  };
+  jwt: {
+    publicKey: string;
+    privateKey: string;
+    accessTokenExpiresInSec: number;
+    refreshTokenExpiresInSec: number;
+  };
+  defaultAdminUserPassword: string | undefined;
+}
+
+export default (): AppConfig => ({
   env: process.env.APP_ENV,
   port: process.env.APP_PORT,
   database: {
