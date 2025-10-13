@@ -8,6 +8,7 @@ import {
 
 import { User } from '../../user/entities/user.entity';
 import { Items } from '../interfaces/item.interface';
+import { StripeMetadata } from '../interfaces/stripe-metadata.interface';
 
 @Entity('order')
 export class Order {
@@ -24,4 +25,7 @@ export class Order {
 
   @Column({ type: 'json' })
   items: Items;
+
+  @Column({ type: 'json', nullable: true })
+  stripe_meta: StripeMetadata;
 }

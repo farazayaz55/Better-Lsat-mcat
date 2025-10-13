@@ -8,6 +8,7 @@ import {
   IsEnum,
   IsNotEmpty,
   IsOptional,
+  IsPhoneNumber,
   IsString,
   Length,
   MaxLength,
@@ -21,6 +22,11 @@ export class CreateUserInput {
   @IsNotEmpty()
   @IsString()
   name: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsPhoneNumber()
+  phone: string;
 
   @ApiProperty()
   @IsNotEmpty()
@@ -49,4 +55,9 @@ export class CreateUserInput {
   @ApiProperty()
   @IsBoolean()
   isAccountDisabled: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  ghlUserId?: string;
 }

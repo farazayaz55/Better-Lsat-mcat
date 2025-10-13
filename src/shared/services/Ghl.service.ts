@@ -142,7 +142,6 @@ export class GhlService {
         },
       })
       .then((res) => {
-        console.log('created appointment res', res.data);
         return res;
       })
       .catch((error) => {
@@ -178,7 +177,6 @@ export class GhlService {
       delete calendar.locationId;
       calendar.teamMembers.push({ userId: user.id });
 
-      console.log(calendar);
       await axios
         .put(
           `${this.baseUrl}/calendars/${process.env.GHL_CALENDAR_ID}`,
@@ -230,6 +228,7 @@ export class GhlService {
   }
 
   async getContact(email: string) {
+    console.log('getContact called with email:', email);
     const response = await axios
       .get(
         `${this.baseUrl}/contacts/?locationId=${process.env.GHL_LOCATION_ID}&query=${email}`,
@@ -244,14 +243,135 @@ export class GhlService {
         },
       )
       .then((res) => {
-        console.log('res get contact', res.data.contacts);
+        console.log('Email search response:', res.data);
         return res;
       })
       .catch((error) => {
-        console.error('err get contact', error.response.data);
+        console.error('err get contact', error.response?.data);
         throw new Error('Failed to get contact in GHL');
       });
-    return response.data.contacts[0];
+    const contact = response.data.contacts[0];
+    console.log(
+      'Email search result:',
+      contact ? 'Found contact' : 'No contact found',
+    );
+    return contact;
+  }
+
+  async getAllContacts() {
+    console.log('getAllContacts called');
+    const response = await axios
+      .get(
+        `${this.baseUrl}/contacts/?locationId=${process.env.GHL_LOCATION_ID}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            Version: '2021-07-28',
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            LocationId: process.env.GHL_LOCATION_ID,
+          },
+        },
+      )
+      .then((res) => {
+        console.log(
+          'All contacts response count:',
+          res.data.contacts?.length || 0,
+        );
+        return res;
+      })
+      .catch((error) => {
+        console.error('err get all contacts', error.response?.data);
+        throw new Error('Failed to get all contacts from GHL');
+      });
+    return response.data.contacts || [];
+  }
+
+  async getContactByPhone(phone: string) {
+    console.log('getContactByPhone called with phone:', phone);
+
+    try {
+      const allContacts = await this.getAllContacts();
+      console.log(
+        'Searching through',
+        allContacts.length,
+        'contacts for phone:',
+        phone,
+      );
+
+      // Normalize phone number for comparison (remove spaces, dashes, parentheses)
+      const normalizedPhone = phone.replace(/[\s\-\(\)]/g, '');
+
+      const contact = allContacts.find((contact: any) => {
+        if (!contact.phone) {return false;}
+
+        // Normalize stored phone number for comparison
+        const normalizedStoredPhone = contact.phone.replace(/[\s\-\(\)]/g, '');
+
+        // Check for exact match or if one contains the other
+        return (
+          normalizedStoredPhone === normalizedPhone ||
+          normalizedStoredPhone.includes(normalizedPhone) ||
+          normalizedPhone.includes(normalizedStoredPhone)
+        );
+      });
+
+      console.log(
+        'Phone search result:',
+        contact ? 'Found contact' : 'No contact found',
+      );
+
+      return contact;
+    } catch (error) {
+      console.error('Error in getContactByPhone:', error);
+      throw error;
+    }
+  }
+
+  async getOrCreateContact(user: UserInput) {
+    console.log('getOrCreateContact called with:', {
+      email: user.email,
+      phone: user.phone,
+    });
+
+    // First try to find by email
+    let contact = await this.getContact(user.email);
+    console.log('Contact found by email:', contact ? 'Yes' : 'No');
+
+    // If not found by email, try to find by phone
+    if (!contact && user.phone) {
+      console.log('Searching by phone:', user.phone);
+      contact = await this.getContactByPhone(user.phone);
+      console.log('Contact found by phone:', contact ? 'Yes' : 'No');
+    }
+
+    // If still not found, create a new contact
+    if (!contact) {
+      console.log('No contact found, attempting to create new contact');
+      try {
+        contact = await this.createContact(user);
+        console.log('Contact created successfully');
+      } catch (error: any) {
+        console.log('Contact creation failed:', error.response?.data);
+        // If creation fails due to duplicate phone, try to find by phone again
+        if (
+          error.response?.data?.message &&
+          error.response.data.message.includes('duplicated contacts') &&
+          user.phone
+        ) {
+          console.log('Duplicate contact detected, searching by phone again');
+          contact = await this.getContactByPhone(user.phone);
+          console.log(
+            'Contact found after duplicate error:',
+            contact ? 'Yes' : 'No',
+          );
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    return contact;
   }
 
   async createContact(user: UserInput) {
@@ -336,7 +456,6 @@ export class GhlService {
         },
       })
       .then((res) => {
-        console.log('res create contact', res.data);
         return res;
       })
       .catch((error) => {

@@ -8,7 +8,9 @@ import { VALIDATION_PIPE_OPTIONS } from './shared/constants';
 import { RequestIdMiddleware } from './shared/middlewares/request-id/request-id.middleware';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+  });
   // app.setGlobalPrefix('api/v1');
   app.setGlobalPrefix('api');
   app.enableVersioning({

@@ -48,7 +48,6 @@ export class AuthService {
 
   login(ctx: RequestContext): AuthTokenOutput {
     this.logger.log(ctx, `${this.login.name} was called`);
-    console.log('ctx.user', ctx.user);
     return this.getAuthToken(ctx, ctx.user!);
   }
 

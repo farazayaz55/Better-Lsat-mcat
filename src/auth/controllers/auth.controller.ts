@@ -81,7 +81,6 @@ export class AuthController {
     @Body() input: RegisterInput,
   ): Promise<BaseApiResponse<RegisterOutput>> {
     // Use database transaction to ensure atomicity
-    console.log('input', input);
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -100,6 +99,7 @@ export class AuthController {
 
       // Step 2: Create user in database
       this.logger.log(ctx, 'Creating user in database');
+      input.ghlUserId = ghlUser?.id;
       const registeredUser = await this.authService.register(ctx, input);
 
       // If we reach here, all operations succeeded

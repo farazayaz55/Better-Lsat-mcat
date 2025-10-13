@@ -2,7 +2,9 @@ import {
   Body,
   ClassSerializerInterceptor,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   HttpStatus,
   Param,
   Patch,
@@ -10,12 +12,14 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { DataSource } from 'typeorm';
 
 import { ROLE } from '../../auth/constants/role.constant';
 import { Roles } from '../../auth/decorators/role.decorator';
@@ -30,9 +34,11 @@ import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dto
 import { AppLogger } from '../../shared/logger/logger.service';
 import { ReqContext } from '../../shared/request-context/req-context.decorator';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
+import { RBACGuard } from '../../shared/guards/rbac.guard';
 import { UserOutput } from '../dtos/user-output.dto';
 import { UpdateUserInput } from '../dtos/user-update-input.dto';
 import { UserService } from '../services/user.service';
+import { GhlService } from '../../shared/services/Ghl.service';
 
 @ApiTags('users')
 @Controller('users')
@@ -40,6 +46,8 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly logger: AppLogger,
+    private readonly ghlService: GhlService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {
     this.logger.setContext(UserController.name);
   }
@@ -124,8 +132,7 @@ export class UserController {
     return { data: user, meta: {} };
   }
 
-  // TODO: ADD RoleGuard
-  // NOTE : This can be made a admin only endpoint. For normal users they can use PATCH /me
+  // RBAC: Admin can edit anyone, Users can edit customers, Customers can edit themselves
   @Patch(':id')
   @ApiOperation({
     summary: 'Update user API',
@@ -138,6 +145,17 @@ export class UserController {
     status: HttpStatus.NOT_FOUND,
     type: BaseApiErrorResponse,
   })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    type: BaseApiErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    type: BaseApiErrorResponse,
+  })
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  @UseGuards(JwtAuthGuard, RBACGuard)
+  @ApiBearerAuth()
   @UseInterceptors(ClassSerializerInterceptor)
   async updateUser(
     @ReqContext() ctx: RequestContext,
@@ -145,8 +163,69 @@ export class UserController {
     @Body() input: UpdateUserInput,
   ): Promise<BaseApiResponse<UserOutput>> {
     this.logger.log(ctx, `${this.updateUser.name} was called`);
-
     const user = await this.userService.updateUser(ctx, userId, input);
     return { data: user, meta: {} };
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete user API',
+  })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'User deleted successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    type: BaseApiErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    type: BaseApiErrorResponse,
+  })
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  @UseGuards(JwtAuthGuard, RolesGuard, RBACGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteUser(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') userId: number,
+  ): Promise<void> {
+    this.logger.log(ctx, `${this.deleteUser.name} was called`);
+
+    // Use database transaction to ensure atomicity
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Step 1: Delete user from database
+      this.logger.log(ctx, 'Deleting user from database');
+      await this.userService.deleteUser(ctx, userId);
+
+      // Step 2: Delete contact from GHL
+      this.logger.log(ctx, 'Deleting contact from GHL');
+      await this.ghlService.deleteUser(userId.toString());
+
+      // If we reach here, all operations succeeded
+      await queryRunner.commitTransaction();
+      this.logger.log(ctx, 'User deletion completed successfully');
+    } catch (error) {
+      // If any operation fails, rollback the transaction
+      await queryRunner.rollbackTransaction();
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorMeta = error instanceof Error ? { stack: error.stack } : {};
+      this.logger.error(
+        ctx,
+        `User deletion failed: ${errorMessage}`,
+        errorMeta,
+      );
+      throw error;
+    } finally {
+      // Release the query runner
+      await queryRunner.release();
+    }
   }
 }

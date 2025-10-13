@@ -30,6 +30,10 @@ export class BaseUserOutput {
 
   @Expose()
   @ApiProperty()
+  phone: string;
+
+  @Expose()
+  @ApiProperty()
   createdAt: string;
 
   @Expose()

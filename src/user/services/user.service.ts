@@ -1,8 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { compare, hash } from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
 import { ROLE } from '../../auth/constants/role.constant';
 import { AppLogger } from '../../shared/logger/logger.service';
+import { GoogleCalendarService } from '../../shared/services/google-calendar-api-key.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { CreateCustomerInput } from '../dtos/customer-create-input.dto';
 import { CreateUserInput } from '../dtos/user-create-input.dto';
@@ -10,12 +15,14 @@ import { UserOutput } from '../dtos/user-output.dto';
 import { UpdateUserInput } from '../dtos/user-update-input.dto';
 import { User } from '../entities/user.entity';
 import { UserRepository } from '../repositories/user.repository';
+import { Order } from '../../order/entities/order.entity';
 
 @Injectable()
 export class UserService {
   public constructor(
     private readonly repository: UserRepository,
     private readonly logger: AppLogger,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {
     this.logger.setContext(UserService.name);
   }
@@ -90,13 +97,6 @@ export class UserService {
       throw new UnauthorizedException();
     }
 
-    console.log('Found user:', {
-      id: user.id,
-      email: user.email,
-      hasPassword: !!user.password,
-      roles: user.roles,
-    });
-
     // Check if user is a customer - customers can't login
     if (user.roles && user.roles.includes(ROLE.CUSTOMER)) {
       console.log('Customer user attempted login - denying access');
@@ -167,6 +167,20 @@ export class UserService {
 
     this.logger.log(ctx, `calling ${UserRepository.name}.findOne`);
     const user = await this.repository.findOne({ where: { username } });
+
+    return plainToInstance(UserOutput, user, {
+      excludeExtraneousValues: true,
+    });
+  }
+
+  public async findByEmail(
+    ctx: RequestContext,
+    email: string,
+  ): Promise<UserOutput> {
+    this.logger.log(ctx, `${this.findByEmail.name} was called`);
+
+    this.logger.log(ctx, `calling ${UserRepository.name}.findOne`);
+    const user = await this.repository.findOne({ where: { email } });
 
     return plainToInstance(UserOutput, user, {
       excludeExtraneousValues: true,
@@ -245,6 +259,7 @@ export class UserService {
   public async assignOrderRoundRobin(
     ctx: RequestContext,
     serviceId: number,
+    preferredDateTime?: string,
   ): Promise<User | undefined> {
     const availableEmployees = await this.findEmployeesByServiceId(serviceId);
 
@@ -256,17 +271,66 @@ export class UserService {
       return undefined;
     }
 
-    // Sort by last assigned order count to implement round-robin
-    availableEmployees.sort(
+    // If specific time is preferred, check Google Calendar availability
+    if (preferredDateTime) {
+      try {
+        const availableAtTime =
+          await this.googleCalendarService.getAvailableEmployeesAtTime(
+            preferredDateTime,
+            availableEmployees,
+          );
+
+        if (availableAtTime.length > 0) {
+          // Assign to employee with least assignments at this specific time
+          const sortedByCount = availableAtTime.sort(
+            (a, b) => a.lastAssignedOrderCount - b.lastAssignedOrderCount,
+          );
+          const selectedEmployee = sortedByCount[0];
+
+          // Update assignment count
+          await this.repository.update(selectedEmployee.id, {
+            lastAssignedOrderCount: selectedEmployee.lastAssignedOrderCount + 1,
+          });
+
+          this.logger.log(
+            ctx,
+            `Assigned employee ${selectedEmployee.name} (ID: ${selectedEmployee.id}) for time ${preferredDateTime}`,
+          );
+
+          return selectedEmployee;
+        } else {
+          this.logger.warn(
+            ctx,
+            `No employees available at preferred time ${preferredDateTime}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          ctx,
+          `Failed to check Google Calendar availability: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
+        );
+        // Fall through to general round-robin
+      }
+    }
+
+    // Fallback to general round-robin (original logic)
+    const sortedEmployees = availableEmployees.sort(
       (a, b) => a.lastAssignedOrderCount - b.lastAssignedOrderCount,
     );
 
-    const selectedEmployee = availableEmployees[0];
+    const selectedEmployee = sortedEmployees[0];
 
     // Update the assignment count
     await this.repository.update(selectedEmployee.id, {
       lastAssignedOrderCount: selectedEmployee.lastAssignedOrderCount + 1,
     });
+
+    this.logger.log(
+      ctx,
+      `Assigned employee ${selectedEmployee.name} (ID: ${selectedEmployee.id}) using round-robin`,
+    );
 
     return selectedEmployee;
   }
@@ -278,5 +342,39 @@ export class UserService {
       isAccountDisabled: false,
     });
     return await this.repository.save(employee);
+  }
+
+  public async deleteUser(ctx: RequestContext, id: number): Promise<void> {
+    this.logger.log(ctx, `${this.deleteUser.name} was called`);
+
+    // First check if user exists
+    const user = await this.repository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with id ${id} not found`);
+    }
+
+    // Check if user has associated orders
+    const orderRepository = this.repository.manager.getRepository(Order);
+    const associatedOrders = await orderRepository.find({
+      where: { customerId: id },
+    });
+
+    if (associatedOrders.length > 0) {
+      this.logger.log(
+        ctx,
+        `Found ${associatedOrders.length} associated orders for user ${id}, deleting them first`,
+      );
+
+      // Delete all associated orders first
+      await orderRepository.delete({ customerId: id });
+      this.logger.log(
+        ctx,
+        `Deleted ${associatedOrders.length} associated orders for user ${id}`,
+      );
+    }
+
+    // Now delete the user
+    await this.repository.delete(id);
+    this.logger.log(ctx, `User with id ${id} deleted successfully`);
   }
 }

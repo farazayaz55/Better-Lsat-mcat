@@ -19,6 +19,7 @@ async function bootstrap() {
 
   const defaultAdmin: CreateUserInput = {
     name: 'Default Admin User',
+    phone: '+1234567890',
     username: 'default-admin',
     password: defaultAdminUserPassword,
     roles: [ROLE.ADMIN],

@@ -2,10 +2,12 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
   IsNotEmpty,
+  IsOptional,
   IsPhoneNumber,
   IsString,
   Length,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 import { ROLE } from '../constants/role.constant';
@@ -42,6 +44,13 @@ export class RegisterInput {
   @ApiProperty()
   @IsNotEmpty()
   roles: ROLE[] = [ROLE.USER];
+
+  @ApiProperty({
+    required: false,
+    description: 'GHL User ID (optional, will be generated if not provided)',
+  })
+  @IsOptional()
+  ghlUserId?: string;
 
   isAccountDisabled: boolean;
 }

@@ -31,6 +31,7 @@ import { GhlService } from '../shared/services/Ghl.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
 import { OrderService } from './order.service';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('order')
 @Controller('order')
@@ -39,6 +40,7 @@ export class OrderController {
     private readonly orderService: OrderService,
     private readonly logger: AppLogger,
     private readonly ghlService: GhlService,
+    private readonly configService: ConfigService,
   ) {
     this.logger.setContext(OrderController.name);
   }
@@ -65,22 +67,29 @@ export class OrderController {
     @Body() createOrderDto: OrderInput,
   ) {
     const order = await this.orderService.create(ctx, createOrderDto);
-    let contact = await this.ghlService.getContact(createOrderDto.user.email);
-    console.log('contact', contact.length === 0, contact);
-    if (contact.length === 0) {
-      contact = await this.ghlService.createContact(createOrderDto.user);
-    }
+    this.logger.log(ctx, `Created order with ID: ${order.id}`);
+    const contact = await this.ghlService.getOrCreateContact(
+      createOrderDto.user,
+    );
     //also create appointment in GHL
     // order.items.forEach(async (item) => {
     //   if (item.id === 8) await this.ghlService.createAppointment(ctx, item);
     // });
     for (const item of order.items) {
       if (item.id === 8) {
+        //TODO: This GHL flow, creates appointment which needs to be replaced by appointment in google calendar.
+        // once ghl creates appointment, it triggers automations such as sending email to customer, sending sms to customer, etc.
+        // we need to replace that as well
         await this.ghlService.createAppointment(ctx, item, contact.id);
       }
+      // Note: Google Calendar events are now created in the webhook after successful payment
     }
-    const res = await this.orderService.generateWooCommerceUrl(ctx, order.id);
-    return res;
+    // Create Stripe checkout session instead of WooCommerce URL
+    const stripeSession = await this.orderService.createStripeCheckoutSession(
+      ctx,
+      order.id,
+    );
+    return stripeSession;
   }
 
   @Get()
@@ -108,6 +117,7 @@ export class OrderController {
   })
   // @UseInterceptors(ClassSerializerInterceptor)
   async findBookings(
+    @ReqContext() ctx: RequestContext,
     @Query('date') date: number,
     @Query('month') month: number,
     @Query('year') year: number,
@@ -115,6 +125,7 @@ export class OrderController {
     @Query('customerTimezone') timezone: string,
   ) {
     return await this.orderService.getSlotsBooked(
+      ctx,
       date,
       month,
       year,
@@ -167,7 +178,52 @@ export class OrderController {
   @UseInterceptors(ClassSerializerInterceptor)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  remove(@Param('id') id: string) {
-    return this.orderService.remove(+id);
+  remove(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    return this.orderService.remove(ctx, +id);
+  }
+
+  @Post(':id/stripe/checkout')
+  @ApiOperation({
+    summary: 'Create Stripe checkout session for order',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Returns Stripe checkout session URL and ID',
+  })
+  async createStripeCheckout(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+  ) {
+    return this.orderService.createStripeCheckoutSession(ctx, +id);
+  }
+
+  @Post(':id/stripe/payment-intent')
+  @ApiOperation({
+    summary: 'Create Stripe payment intent for order',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Returns Stripe payment intent client secret and ID',
+  })
+  async createStripePaymentIntent(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+  ) {
+    return this.orderService.createStripePaymentIntent(ctx, +id);
+  }
+
+  @Post('stripe/confirm-payment')
+  @ApiOperation({
+    summary: 'Confirm Stripe payment',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Returns payment confirmation status',
+  })
+  async confirmStripePayment(
+    @ReqContext() ctx: RequestContext,
+    @Body() body: { paymentIntentId: string },
+  ) {
+    return this.orderService.confirmStripePayment(ctx, body.paymentIntentId);
   }
 }

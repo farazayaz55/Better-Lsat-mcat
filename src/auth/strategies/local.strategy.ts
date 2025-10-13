@@ -32,10 +32,7 @@ export class LocalStrategy extends PassportStrategy(Strategy, STRATEGY_LOCAL) {
     const ctx = createRequestContext(request);
 
     this.logger.log(ctx, `${this.validate.name} was called`);
-    console.log('email', email);
-    console.log('password', password);
     const user = await this.authService.validateUser(ctx, email, password);
-    console.log('user', user);
     // Passport automatically creates a user object, based on the value we return from the validate() method,
     // and assigns it to the Request object as req.user
     return user;

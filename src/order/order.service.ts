@@ -3,6 +3,8 @@ import { plainToInstance } from 'class-transformer';
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
+import { GoogleCalendarService } from '../shared/services/google-calendar-api-key.service';
+import { StripeService } from '../shared/services/stripe.service';
 import {
   IWooCommerceOrder,
   IWooCommerceOrderResponse,
@@ -15,6 +17,11 @@ import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
 import { Order } from './entities/order.entity';
 import { OrderRepository } from './repository/order.repository';
+import { StripeMetadata } from './interfaces/stripe-metadata.interface';
+import {
+  RedirectUrls,
+  CheckoutRedirectConfig,
+} from './interfaces/checkout-redirect.interface';
 
 @Injectable()
 export class OrderService {
@@ -24,6 +31,8 @@ export class OrderService {
     private readonly userService: UserService,
     private readonly wS: WooCommerceService,
     private readonly ghlService: GhlService,
+    private readonly stripeService: StripeService,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {
     this.logger.setContext(OrderService.name);
   }
@@ -35,6 +44,13 @@ export class OrderService {
     const order = new Order();
     order.items = createOrderDto.items;
 
+    // Initialize stripe_meta with default values
+    order.stripe_meta = {
+      paymentStatus: 'pending',
+      lastWebhookProcessedAt: new Date(),
+      webhookErrors: [],
+    };
+
     //create customer if does not exist
     // if exists then fetch it
     const customer = await this.userService.getOrCreateCustomer(ctx, {
@@ -43,8 +59,6 @@ export class OrderService {
       phone: createOrderDto.user.phone,
     } as CreateCustomerInput);
     order.customerId = customer.id;
-
-    console.log('createOrderDto.items', createOrderDto.items);
 
     // Assign employees per item using round-robin
     if (createOrderDto.items && createOrderDto.items.length > 0) {
@@ -75,82 +89,118 @@ export class OrderService {
     });
   }
 
-  async generateWooCommerceUrl(
-    ctx: RequestContext,
-    orderId: number | undefined,
-  ): Promise<IWooCommerceOrderResponse | undefined> {
-    if (!orderId) {
-      this.logger.error(ctx, 'Invalid id passed');
-      return;
-    }
-    const order = await this.findOne(orderId);
-    let orderData: IWooCommerceOrder = {
-      payment_method: 'cod', // or dynamically from your order/payment choice
-      payment_method_title: 'Cash on Delivery',
-      set_paid: false,
-      billing: {
-        first_name: '',
-        last_name: '',
-        address_1: 'N/A',
-        address_2: '',
-        city: 'N/A',
-        state: 'N/A',
-        postcode: '00000',
-        country: 'US',
-        email: '',
-        phone: '',
-      },
-      line_items: [],
-      shipping_lines: [
-        {
-          method_id: 'flat_rate', // example
-          method_title: 'Flat Rate',
-          total: '0.00',
-        },
-      ],
-      customer_id: undefined, // optional if linked
-      customer_note: '',
+  async updateStripeMeta(
+    orderId: number,
+    stripeMeta: StripeMetadata,
+  ): Promise<void> {
+    await this.repository.update(orderId, { stripe_meta: stripeMeta });
+  }
+
+  private generateRedirectUrls(orderId: number): RedirectUrls {
+    const config: CheckoutRedirectConfig = {
+      baseUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+      successPath: '/payment/success',
+      cancelPath: '/payment/cancel',
+      includeOrderId: true,
+      includeSessionId: true,
     };
-    if (order) {
-      orderData = {
-        payment_method: 'cod', // or dynamically from your order/payment choice
-        payment_method_title: 'Cash on Delivery',
-        set_paid: false,
-        billing: {
-          first_name: order.customer.name,
-          last_name: order.customer.name,
-          address_1: 'N/A',
-          address_2: '',
-          city: 'N/A',
-          state: 'N/A',
-          postcode: '00000',
-          country: 'US',
-          email: order.customer.email,
-          phone: '',
-        },
-        line_items: order.items.map((item) => ({
-          product_id: 961, // must match WooCommerce product ID
-          quantity: item.quantity,
-          total: item.price.toString(),
-          meta_data: [
-            { key: 'package_name', value: item.name },
-            // { key: 'amelia_datetime', value: JSON.stringify(item.DateTime) },
-          ],
-        })),
-        shipping_lines: [
-          {
-            method_id: 'flat_rate', // example
-            method_title: 'Flat Rate',
-            total: '0', //shipping cost
-          },
-        ],
-        customer_id: undefined, // optional if linked
-        customer_note: '',
-      };
+
+    const successParams = new URLSearchParams();
+    const cancelParams = new URLSearchParams();
+
+    if (config.includeSessionId) {
+      successParams.append('session_id', '{CHECKOUT_SESSION_ID}');
+    }
+    if (config.includeOrderId) {
+      successParams.append('order_id', orderId.toString());
+      cancelParams.append('order_id', orderId.toString());
     }
 
-    return await this.wS.createOrder(orderData);
+    const successUrl = `${config.baseUrl}${config.successPath}?${successParams.toString()}`;
+    const cancelUrl = `${config.baseUrl}${config.cancelPath}?${cancelParams.toString()}`;
+
+    return {
+      success: successUrl,
+      cancel: cancelUrl,
+    };
   }
+
+  // async generateWooCommerceUrl(
+  //   ctx: RequestContext,
+  //   orderId: number | undefined,
+  // ): Promise<IWooCommerceOrderResponse | undefined> {
+  //   if (!orderId) {
+  //     this.logger.error(ctx, 'Invalid id passed');
+  //     return;
+  //   }
+  //   const order = await this.findOne(orderId);
+  //   let orderData: IWooCommerceOrder = {
+  //     payment_method: 'cod', // or dynamically from your order/payment choice
+  //     payment_method_title: 'Cash on Delivery',
+  //     set_paid: false,
+  //     billing: {
+  //       first_name: '',
+  //       last_name: '',
+  //       address_1: 'N/A',
+  //       address_2: '',
+  //       city: 'N/A',
+  //       state: 'N/A',
+  //       postcode: '00000',
+  //       country: 'US',
+  //       email: '',
+  //       phone: '',
+  //     },
+  //     line_items: [],
+  //     shipping_lines: [
+  //       {
+  //         method_id: 'flat_rate', // example
+  //         method_title: 'Flat Rate',
+  //         total: '0.00',
+  //       },
+  //     ],
+  //     customer_id: undefined, // optional if linked
+  //     customer_note: '',
+  //   };
+  //   if (order) {
+  //     orderData = {
+  //       payment_method: 'cod', // or dynamically from your order/payment choice
+  //       payment_method_title: 'Cash on Delivery',
+  //       set_paid: false,
+  //       billing: {
+  //         first_name: order.customer.name,
+  //         last_name: order.customer.name,
+  //         address_1: 'N/A',
+  //         address_2: '',
+  //         city: 'N/A',
+  //         state: 'N/A',
+  //         postcode: '00000',
+  //         country: 'US',
+  //         email: order.customer.email,
+  //         phone: '',
+  //       },
+  //       line_items: order.items.map((item) => ({
+  //         product_id: 961, // must match WooCommerce product ID
+  //         quantity: item.quantity,
+  //         total: item.price.toString(),
+  //         meta_data: [
+  //           { key: 'package_name', value: item.name },
+  //           // { key: 'amelia_datetime', value: JSON.stringify(item.DateTime) },
+  //         ],
+  //       })),
+  //       shipping_lines: [
+  //         {
+  //           method_id: 'flat_rate', // example
+  //           method_title: 'Flat Rate',
+  //           total: '0', //shipping cost
+  //         },
+  //       ],
+  //       customer_id: undefined, // optional if linked
+  //       customer_note: '',
+  //     };
+  //   }
+
+  //   return await this.wS.createOrder(orderData);
+  // }
 
   // async getWooCommerceOrders(): Promise<WooCommerceOrderResponse[]> {
   //   return await this.wS.getOrders();
@@ -169,6 +219,7 @@ export class OrderService {
   }
 
   async getSlotsBooked(
+    ctx: RequestContext,
     date: number,
     month: number,
     year: number,
@@ -177,87 +228,14 @@ export class OrderService {
   ) {
     const from = new Date(year, month - 1, date, 0, 0, 0); // day start
     const to = new Date(year, month - 1, date, 23, 59, 59, 999); // day end
-    let ghlSlots: string[] = []; // these are the slots that are available(free) in GHL calendar of Mustafa
-    const wooCommerceSlots: string[] = []; // these are the slots that are booked in WooCommerce
 
     // Generate slots based on order ID
-    // Order ID 5 uses 15-minute slots, others use 1-hour slots
+    // Order ID 8 uses 15-minute slots, others use 1-hour slots
     const slotDurationMinutes = packageId === 8 ? 15 : 60;
-
-    //for package id 8, we were using leadconnector GHL calendar integration, so we need to get the slots from there as well just for safety
-    if (packageId === 8) {
-      ghlSlots = await this.ghlService.getSlots(
-        from.getTime().toString(),
-        to.getTime().toString(),
-      );
-    } else {
-      const orders = await this.wS.getOrders();
-      for (const order of orders) {
-        for (const item of order.line_items) {
-          if (item.meta_data.find((meta) => meta.key === 'ameliabooking')) {
-            const bookingData = item.meta_data.find(
-              (meta) => meta.key === 'ameliabooking',
-            )?.value;
-
-            // Check if the value is already an object or needs to be parsed
-            const booking =
-              typeof bookingData === 'string'
-                ? JSON.parse(bookingData)
-                : bookingData;
-
-            const bookingStart = booking.package[0].bookingStart;
-            const utcOffset = booking.package[0].utcOffset;
-
-            const [datePart, timePart] = bookingStart.split(' ');
-            const [year, month, day] = datePart.split('-').map(Number);
-            const [hour, minute, second] = timePart.split(':').map(Number);
-
-            // Create date in local timezone, then convert to UTC
-            const localDate = new Date(
-              year,
-              month - 1,
-              day,
-              hour,
-              minute,
-              second,
-            );
-
-            // Subtract the UTC offset to get actual UTC time
-            // utcOffset is in minutes: 300 means UTC+5
-            const utcDate = new Date(
-              localDate.getTime() - utcOffset * 60 * 1000,
-            );
-            wooCommerceSlots.push(utcDate.toISOString());
-          }
-        }
-      }
-    }
 
     // Get all employees who can work on this service
     const availableEmployees =
       await this.userService.findEmployeesByServiceId(packageId);
-
-    const generatedSlots = this.generateTimeSlots(
-      date,
-      month,
-      year,
-
-      slotDurationMinutes,
-      customerTimezone,
-      availableEmployees,
-    );
-
-    if (!packageId) {
-      // If no specific service ID, return all available slots
-      return {
-        bookedSlots: [],
-        availableSlots: generatedSlots.map((slot) => ({
-          slot,
-          availableEmployees: [],
-        })),
-        slotDurationMinutes,
-      };
-    }
 
     if (availableEmployees.length === 0) {
       return {
@@ -268,92 +246,118 @@ export class OrderService {
       };
     }
 
-    // Get all orders for this service and collect booked slots per employee
-    const orders = await this.findAll();
-    const employeeBookedSlots = new Map<number, Set<string>>();
+    // Generate time slots (8AM-8PM Canadian time)
+    const generatedSlots = this.generateTimeSlots(
+      date,
+      month,
+      year,
+      slotDurationMinutes,
+      customerTimezone,
+      availableEmployees,
+      ctx,
+    );
 
-    // Initialize map for all available employees
-    for (const emp of availableEmployees) {
-      employeeBookedSlots.set(emp.id, new Set<string>());
-    }
-
-    // Collect booked slots for each employee
-    for (const order of orders) {
-      for (const item of order.items) {
-        if (item.id === packageId && item.assignedEmployeeId) {
-          const employeeId = item.assignedEmployeeId;
-          const employeeSlots = employeeBookedSlots.get(employeeId);
-
-          if (employeeSlots) {
-            for (const dt of item.DateTime) {
-              const slotDate = new Date(dt);
-              if (slotDate >= from && slotDate <= to) {
-                employeeSlots.add(dt);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Find slots that are booked for ALL employees (completely unavailable)
-    const allBookedSlots = new Set<string>();
-    const partiallyBookedSlots = new Set<string>();
-
-    for (const slot of generatedSlots) {
-      const bookedForEmployees = availableEmployees.filter((emp) => {
-        const employeeSlots = employeeBookedSlots.get(emp.id);
-        return employeeSlots?.has(slot) || false;
-      });
-
-      if (bookedForEmployees.length === availableEmployees.length) {
-        // All employees are booked for this slot
-        allBookedSlots.add(slot);
-      } else if (bookedForEmployees.length > 0) {
-        // Some employees are booked for this slot
-        partiallyBookedSlots.add(slot);
-      }
-    }
-
-    // Create available slots with available employees
-    let availableSlots = generatedSlots
-      .filter((slot) => !allBookedSlots.has(slot))
-      .map((slot) => {
-        const availableForSlot = availableEmployees.filter((emp) => {
-          const employeeSlots = employeeBookedSlots.get(emp.id);
-          return !employeeSlots?.has(slot);
-        });
-
-        return {
+    if (!packageId) {
+      // If no specific service ID, return all available slots
+      return {
+        bookedSlots: [],
+        availableSlots: generatedSlots.map((slot) => ({
           slot,
-          availableEmployees: availableForSlot.map((emp) => ({
+          availableEmployees: availableEmployees.map((emp) => ({
             id: emp.id,
             name: emp.name,
             email: emp.email,
           })),
-        };
-      });
+        })),
+        slotDurationMinutes,
+      };
+    }
 
-    //
-    const bookedSlots = [...allBookedSlots].sort(
-      (a, b) => new Date(a).getTime() - new Date(b).getTime(),
-    );
+    // Handle package ID 8 (GHL integration)
     if (packageId === 8) {
+      const ghlSlots = await this.ghlService.getSlots(
+        from.getTime().toString(),
+        to.getTime().toString(),
+      );
       return {
-        bookedSlots,
+        bookedSlots: [],
         availableSlots: ghlSlots,
         slotDurationMinutes,
       };
-    } else {
-      //filter those slots that are already booked in wooCommerce
-      availableSlots = availableSlots.filter(
-        (slot) => !wooCommerceSlots.includes(slot.slot),
+    }
+
+    // For other packages, use Google Calendar integration
+    try {
+      // Get booked slots from Google Calendar
+      const googleCalendarBookings =
+        await this.googleCalendarService.getBookedSlots(
+          from,
+          to,
+          availableEmployees,
+        );
+
+      // Filter available slots (at least one employee must be free)
+      const availableSlots = generatedSlots
+        .map((slot) => {
+          const slotBookings = googleCalendarBookings.get(slot) || [];
+          const busyEmployeeIds = slotBookings.map((b) => b.employeeId);
+
+          // Find employees available for this slot
+          const availableForSlot = availableEmployees.filter(
+            (emp) => !busyEmployeeIds.includes(emp.id),
+          );
+
+          return {
+            slot,
+            availableEmployees: availableForSlot.map((emp) => ({
+              id: emp.id,
+              name: emp.name,
+              email: emp.email,
+            })),
+          };
+        })
+        .filter((slotInfo) => slotInfo.availableEmployees.length > 0);
+
+      // Find completely booked slots (all employees busy)
+      const bookedSlots = generatedSlots.filter((slot) => {
+        const slotBookings = googleCalendarBookings.get(slot) || [];
+        const busyEmployeeIds = slotBookings.map((b) => b.employeeId);
+        return busyEmployeeIds.length === availableEmployees.length;
+      });
+
+      this.logger.log(
+        ctx,
+        `Found ${availableSlots.length} available slots and ${bookedSlots.length} booked slots for service ${packageId}`,
       );
 
       return {
-        bookedSlots,
+        bookedSlots: bookedSlots.sort(
+          (a, b) => new Date(a).getTime() - new Date(b).getTime(),
+        ),
         availableSlots,
         slotDurationMinutes,
+      };
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to get Google Calendar slots: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+
+      // Fallback: return all slots as available
+      return {
+        bookedSlots: [],
+        availableSlots: generatedSlots.map((slot) => ({
+          slot,
+          availableEmployees: availableEmployees.map((emp) => ({
+            id: emp.id,
+            name: emp.name,
+            email: emp.email,
+          })),
+        })),
+        slotDurationMinutes,
+        warning: 'Unable to check Google Calendar availability',
       };
     }
   }
@@ -362,64 +366,261 @@ export class OrderService {
     date: number,
     month: number,
     year: number,
-
     durationMinutes: number,
     customerTimezone?: string,
     availableEmployees?: User[],
+    ctx?: RequestContext,
   ): string[] {
-    const from = new Date(year, month - 1, date, 0, 0, 0); // day start
-    const to = new Date(year, month - 1, date, 23, 59, 59, 999); // day end
     const slots: string[] = [];
-    const current = new Date(from);
-    let startWorkHour, endWorkHour;
 
-    if (availableEmployees) {for (const employee of availableEmployees) {
-      const employeeWorkHours = employee.workHours;
-      if (employeeWorkHours) {
-        const day = current.toLocaleString('en-us', { weekday: 'long' });
-        const workHours = employeeWorkHours[day];
-        if (workHours) {
-          const [startString, endString] = workHours[0].split('-');
-          startWorkHour = Number.parseInt(startString.split(':')[0]); // Gets hour part
-          endWorkHour = Number.parseInt(endString.split(':')[0]); // Gets hour part
+    // Fixed business hours: 8AM-8PM Canadian time
+    const startHour = 8;
+    const endHour = 20;
+
+    // Generate slots for the entire day
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let minute = 0; minute < 60; minute += durationMinutes) {
+        // Create date in Canadian timezone
+        const slotDate = new Date(year, month - 1, date, hour, minute);
+
+        // Convert to Canadian timezone to ensure we're within business hours
+        const canadianTime = new Date(
+          slotDate.toLocaleString('en-US', { timeZone: 'America/Toronto' }),
+        );
+
+        // Only add if it's still within business hours
+        if (
+          canadianTime.getHours() >= startHour &&
+          canadianTime.getHours() < endHour
+        ) {
+          slots.push(slotDate.toISOString());
         }
       }
-    }}
+    }
 
-    while (current <= to) {
-      // Convert to Canadian timezone (Eastern Time)
-      const canadianTime = new Date(
-        current.toLocaleString('en-US', { timeZone: 'America/Toronto' }),
+    if (ctx) {
+      this.logger.log(
+        ctx,
+        `Generated ${slots.length} time slots for ${date}/${month}/${year} (${durationMinutes}min intervals)`,
       );
-      const hour = canadianTime.getHours();
-
-      // Only generate slots during business hours (8 AM to 8 PM Canadian time)
-      // if (hour >= 8 && hour < 20) {
-      //   //also check if the slot is within the same day as customerTimezone
-      //   const currentTime = new Date(
-      //     current.toLocaleString('en-us', { timeZone: customerTimezone }),
-      //   );
-      //   if (currentTime.getDate() == date)
-      //     slots.push(new Date(current).toISOString());
-      // }
-
-      //this above logic will be replaced by working hours of employee
-      if (
-        startWorkHour &&
-        endWorkHour &&
-        hour >= startWorkHour &&
-        hour < endWorkHour
-      ) {
-        slots.push(new Date(current).toISOString());
-      }
-      // Add duration minutes
-      current.setMinutes(current.getMinutes() + durationMinutes);
     }
 
     return slots;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} order`;
+  async remove(ctx: RequestContext, id: number): Promise<void> {
+    this.logger.log(ctx, `${this.remove.name} was called for order ID: ${id}`);
+
+    // First check if the order exists
+    const order = await this.findOne(id);
+    if (!order) {
+      this.logger.warn(ctx, `Order with ID ${id} not found for deletion`);
+      throw new Error(`Order with ID ${id} not found`);
+    }
+
+    // Delete the order
+    await this.repository.delete(id);
+    this.logger.log(ctx, `Order with ID ${id} successfully deleted`);
+  }
+
+  async createStripeCheckoutSession(
+    ctx: RequestContext,
+    orderId: number | undefined,
+  ): Promise<{ url: string; sessionId: string } | undefined> {
+    if (!orderId) {
+      this.logger.error(ctx, 'Invalid order ID passed');
+      return;
+    }
+
+    const order = await this.findOne(orderId);
+    if (!order) {
+      this.logger.error(ctx, `Order with ID ${orderId} not found`);
+      return;
+    }
+
+    try {
+      // Calculate total amount in cents
+      const totalAmount = order.items.reduce((total, item) => {
+        return total + item.price * item.quantity * 100; // Convert to cents
+      }, 0);
+
+      // Create Stripe customer if not exists
+      let stripeCustomer;
+      const existingCustomers = await this.stripeService.listCustomersByEmail(
+        ctx,
+        order.customer.email,
+      );
+
+      if (existingCustomers.length > 0) {
+        stripeCustomer = existingCustomers[0];
+      } else {
+        stripeCustomer = await this.stripeService.createCustomer(ctx, {
+          email: order.customer.email,
+          name: order.customer.name,
+          metadata: {
+            orderId: orderId.toString(),
+            customerId: order.customer.id.toString(),
+          },
+        });
+      }
+
+      // Prepare line items for Stripe checkout
+      const lineItems = order.items.map((item) => ({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: item.name,
+            description: item.Description || `Duration: ${item.Duration}`,
+          },
+          unit_amount: item.price * 100, // Convert to cents
+        },
+        quantity: item.quantity,
+      }));
+
+      // Generate redirect URLs
+      const redirectUrls = this.generateRedirectUrls(orderId);
+
+      // Create checkout session with configurable redirect URLs
+      const session = await this.stripeService.createCheckoutSession(ctx, {
+        lineItems,
+        customerEmail: order.customer.email,
+        successUrl: redirectUrls.success,
+        cancelUrl: redirectUrls.cancel,
+        metadata: {
+          orderId: orderId.toString(),
+          customerId: order.customer.id.toString(),
+        },
+      });
+
+      this.logger.log(ctx, `Stripe checkout session created: ${session.id}`);
+
+      // Update order with Stripe session information
+      order.stripe_meta = {
+        ...order.stripe_meta,
+        checkoutSessionId: session.id,
+        checkoutSessionStatus: session.status || undefined,
+        checkoutSessionUrl: session.url || undefined,
+        stripeCustomerId: stripeCustomer.id,
+        amountPaid: totalAmount / 100, // Convert back to dollars
+        currency: 'usd',
+        lastWebhookProcessedAt: new Date(),
+        // Store redirect URLs for reference
+        successUrl: redirectUrls.success,
+        cancelUrl: redirectUrls.cancel,
+      };
+
+      // Save the updated order
+      await this.repository.save(order);
+
+      return {
+        url: session.url!,
+        sessionId: session.id,
+      };
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to create Stripe checkout session: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  async createStripePaymentIntent(
+    ctx: RequestContext,
+    orderId: number | undefined,
+  ): Promise<{ clientSecret: string; paymentIntentId: string } | undefined> {
+    if (!orderId) {
+      this.logger.error(ctx, 'Invalid order ID passed');
+      return;
+    }
+
+    const order = await this.findOne(orderId);
+    if (!order) {
+      this.logger.error(ctx, `Order with ID ${orderId} not found`);
+      return;
+    }
+
+    try {
+      // Calculate total amount in cents
+      const totalAmount = order.items.reduce((total, item) => {
+        return total + item.price * item.quantity * 100; // Convert to cents
+      }, 0);
+
+      // Create Stripe customer if not exists
+      let stripeCustomer;
+      const existingCustomers = await this.stripeService.listCustomersByEmail(
+        ctx,
+        order.customer.email,
+      );
+
+      if (existingCustomers.length > 0) {
+        stripeCustomer = existingCustomers[0];
+      } else {
+        stripeCustomer = await this.stripeService.createCustomer(ctx, {
+          email: order.customer.email,
+          name: order.customer.name,
+          metadata: {
+            orderId: orderId.toString(),
+            customerId: order.customer.id.toString(),
+          },
+        });
+      }
+
+      // Create payment intent
+      const paymentIntent = await this.stripeService.createPaymentIntent(ctx, {
+        amount: totalAmount,
+        currency: 'usd',
+        customerId: stripeCustomer.id,
+        description: `Order #${orderId} - ${order.items.map((item) => item.name).join(', ')}`,
+        metadata: {
+          orderId: orderId.toString(),
+          customerId: order.customer.id.toString(),
+        },
+      });
+
+      this.logger.log(
+        ctx,
+        `Stripe payment intent created: ${paymentIntent.id}`,
+      );
+
+      return {
+        clientSecret: paymentIntent.client_secret!,
+        paymentIntentId: paymentIntent.id,
+      };
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to create Stripe payment intent: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  async confirmStripePayment(
+    ctx: RequestContext,
+    paymentIntentId: string,
+  ): Promise<boolean> {
+    try {
+      const paymentIntent = await this.stripeService.retrievePaymentIntent(
+        ctx,
+        paymentIntentId,
+      );
+
+      if (paymentIntent.status === 'succeeded') {
+        this.logger.log(
+          ctx,
+          `Payment confirmed for intent: ${paymentIntentId}`,
+        );
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to confirm payment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      return false;
+    }
   }
 }
