@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import {
   ArrayNotEmpty,
   IsAlphanumeric,
@@ -17,8 +17,7 @@ import {
 import { ROLE } from '../../auth/constants/role.constant';
 
 export class CreateUserInput {
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty()
   @IsNotEmpty()
   @IsString()
   name: string;
@@ -56,8 +55,5 @@ export class CreateUserInput {
   @IsBoolean()
   isAccountDisabled: boolean;
 
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
   ghlUserId?: string;
 }

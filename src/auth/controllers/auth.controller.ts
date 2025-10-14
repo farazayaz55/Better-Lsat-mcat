@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ClassSerializerInterceptor,
   Controller,
@@ -75,6 +76,7 @@ export class AuthController {
     status: HttpStatus.CREATED,
     type: swaggerBaseApiResponse(RegisterOutput),
   })
+  // eslint-disable-next-line max-statements
   async registerLocal(
     @ReqContext() ctx: RequestContext,
     @Body() input: RegisterInput,
@@ -85,11 +87,31 @@ export class AuthController {
     await queryRunner.startTransaction();
 
     try {
+      // Validate roles against constants BEFORE any processing
+      const validRoles = Object.values(ROLE);
+      const invalidRoles = input.roles.filter(
+        (role) => !validRoles.includes(role),
+      );
+
+      if (invalidRoles.length > 0) {
+        this.logger.error(
+          ctx,
+          `Invalid roles provided: ${invalidRoles.join(', ')}. Valid roles are: ${validRoles.join(', ')}`,
+        );
+        throw new BadRequestException(
+          `Invalid roles: ${invalidRoles.join(', ')}. Valid roles are: ${validRoles.join(', ')}`,
+        );
+      }
+
       let ghlUser = null;
 
       // Step 1: Create user in GHL (if USER role)
       if (input.roles.includes(ROLE.USER)) {
         this.logger.log(ctx, 'Creating user in GHL');
+        this.logger.log(
+          ctx,
+          `DEBUG - Before GHL creation, input name: "${input.name}"`,
+        );
         ghlUser = await this.ghlService.createUser(input);
 
         this.logger.log(ctx, 'Adding user to calendar');
@@ -98,7 +120,15 @@ export class AuthController {
 
       // Step 2: Create user in database
       this.logger.log(ctx, 'Creating user in database');
+      this.logger.log(
+        ctx,
+        `DEBUG - Before database creation, input name: "${input.name}"`,
+      );
       input.ghlUserId = ghlUser?.id;
+      this.logger.log(
+        ctx,
+        `DEBUG - After setting ghlUserId, input name: "${input.name}"`,
+      );
       const registeredUser = await this.authService.register(ctx, input);
 
       // If we reach here, all operations succeeded

@@ -48,7 +48,7 @@ export class ComplexPermissionGuard implements CanActivate {
     }
 
     // Get the target user to check their role
-    const targetUser = await this.userService.findById(
+    const targetUser = await this.userService.getUserById(
       { user: currentUser } as any,
       targetUserId,
     );

@@ -1,3 +1,10 @@
+export enum PaymentStatus {
+  PENDING = 'pending',
+  SUCCEEDED = 'succeeded',
+  FAILED = 'failed',
+  CANCELED = 'canceled',
+}
+
 export interface StripeMetadata {
   // Checkout Session Information
   checkoutSessionId?: string;
@@ -10,7 +17,7 @@ export interface StripeMetadata {
   paymentIntentClientSecret?: string;
 
   // Payment Information
-  paymentStatus?: 'pending' | 'succeeded' | 'failed' | 'canceled';
+  paymentStatus?: PaymentStatus;
   paymentMethod?: string;
   amountPaid?: number;
   currency?: string;

@@ -72,7 +72,7 @@ export class UserController {
   ): Promise<BaseApiResponse<UserOutput>> {
     this.logger.log(ctx, `${this.getMyProfile.name} was called`);
 
-    const user = await this.userService.findById(ctx, ctx.user!.id);
+    const user = await this.userService.getUserById(ctx, ctx.user!.id);
     return { data: user, meta: {} };
   }
 
@@ -199,13 +199,18 @@ export class UserController {
     await queryRunner.startTransaction();
 
     try {
+      // Step 2: Delete contact from GHL
+
+      const user = await this.userService.getUserById(ctx, userId);
+      if (user.roles.includes(ROLE.USER)) {
+        const ghlUserId = await this.userService.getGhlIdByUserId(ctx, userId);
+        this.logger.log(ctx, `Deleting contact from GHL ${ghlUserId}`);
+        await this.ghlService.deleteUser(ghlUserId);
+      }
+
       // Step 1: Delete user from database
       this.logger.log(ctx, 'Deleting user from database');
       await this.userService.deleteUser(ctx, userId);
-
-      // Step 2: Delete contact from GHL
-      this.logger.log(ctx, 'Deleting contact from GHL');
-      await this.ghlService.deleteUser(userId.toString());
 
       // If we reach here, all operations succeeded
       await queryRunner.commitTransaction();

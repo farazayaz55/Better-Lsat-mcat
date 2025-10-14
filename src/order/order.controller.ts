@@ -17,6 +17,7 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -34,7 +35,9 @@ import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
 import { OrderService } from './order.service';
 import { ConfigService } from '@nestjs/config';
+import { PaginationParamsDto as PaginationParametersDto } from '../shared/dtos/pagination-params.dto';
 import {
+  PaymentStatus,
   StripeCheckoutSession,
   StripePaymentIntent,
 } from './interfaces/stripe-metadata.interface';
@@ -104,6 +107,13 @@ export class OrderController {
   @ApiOperation({
     summary: 'Get Orders as a list API',
   })
+  @ApiQuery({
+    name: 'orderStatus',
+    required: false,
+    enum: PaymentStatus,
+    description: 'Filter orders by payment status',
+    example: PaymentStatus.SUCCEEDED,
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     type: swaggerBaseApiResponse([OrderOutput]),
@@ -111,9 +121,16 @@ export class OrderController {
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  async findAll(): Promise<BaseApiResponse<OrderOutput[]>> {
-    const orders = await this.orderService.findAll();
-    return { data: orders, meta: {} };
+  async findAll(
+    @Query() query: PaginationParametersDto,
+    @Query('orderStatus') orderStatus?: PaymentStatus,
+  ): Promise<BaseApiResponse<OrderOutput[]>> {
+    const { orders, count } = await this.orderService.findAll(
+      query.limit,
+      query.offset,
+      orderStatus,
+    );
+    return { data: orders, meta: { count } };
   }
 
   /**get for specific month */
@@ -172,7 +189,10 @@ export class OrderController {
     if (!order) {
       throw new NotFoundException();
     }
-    const orderOutput = plainToInstance(OrderOutput, order);
+    const orderOutput = plainToInstance(OrderOutput, order, {
+      excludeExtraneousValues: true,
+    });
+    console.log(orderOutput);
     return { data: orderOutput, meta: {} };
   }
 

@@ -31,11 +31,30 @@ export class UserService {
     input: CreateUserInput,
   ): Promise<UserOutput> {
     this.logger.log(ctx, `${this.createUser.name} was called`);
+    this.logger.log(
+      ctx,
+      `DEBUG - UserService received CreateUserInput: ${JSON.stringify(input, null, 2)}`,
+    );
+    // DEBUG: Try without excludeExtraneousValues first to see if that's the issue
+    const user = plainToInstance(User, input, {
+      excludeExtraneousValues: false, // Changed from true to false
+    });
 
-    const user = plainToInstance(User, input);
+    this.logger.log(
+      ctx,
+      `DEBUG - After plainToInstance, user.name: "${user.name}" (type: ${typeof user.name})`,
+    );
+    this.logger.log(
+      ctx,
+      `DEBUG - User object: ${JSON.stringify(user, null, 2)}`,
+    );
 
     user.password = await hash(input.password, 10);
 
+    this.logger.log(
+      ctx,
+      `DEBUG - Before saving, user.name: "${user.name}" (type: ${typeof user.name})`,
+    );
     this.logger.log(ctx, `calling ${UserRepository.name}.saveUser`);
     await this.repository.save(user);
 
@@ -72,7 +91,9 @@ export class UserService {
   ): Promise<UserOutput> {
     this.logger.log(ctx, `${this.createCustomer.name} was called`);
 
-    const user = plainToInstance(User, input);
+    const user = plainToInstance(User, input, {
+      excludeExtraneousValues: true,
+    });
 
     // user.password = await hash(input.password, 10);
 
@@ -134,17 +155,6 @@ export class UserService {
     return { users: usersOutput, count };
   }
 
-  public async findById(ctx: RequestContext, id: number): Promise<UserOutput> {
-    this.logger.log(ctx, `${this.findById.name} was called`);
-
-    this.logger.log(ctx, `calling ${UserRepository.name}.findOne`);
-    const user = await this.repository.findOne({ where: { id } });
-
-    return plainToInstance(UserOutput, user, {
-      excludeExtraneousValues: true,
-    });
-  }
-
   public async getUserById(
     ctx: RequestContext,
     id: number,
@@ -157,6 +167,15 @@ export class UserService {
     return plainToInstance(UserOutput, user, {
       excludeExtraneousValues: true,
     });
+  }
+
+  public async getGhlIdByUserId(
+    ctx: RequestContext,
+    id: number,
+  ): Promise<string> {
+    this.logger.log(ctx, `${this.getGhlIdByUserId.name} was called`);
+    const user = await this.repository.findOne({ where: { id } });
+    return user?.ghlUserId ?? '';
   }
 
   public async findByUsername(

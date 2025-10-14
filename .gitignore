@@ -393,3 +393,10 @@ local/
 documentation
 test-report.xml
 tsconfig.build.tsbuildinfo
+
+# Database backups
+backups/
+database_snapshot_*.sql
+database_snapshot_*.sql.gz
+database_snapshot_*.dump
+postgres_volume_*.tar.gz

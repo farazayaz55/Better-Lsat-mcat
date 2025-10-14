@@ -17,6 +17,7 @@ import { StripeService } from '../shared/services/stripe.service';
 import { OrderService } from '../order/order.service';
 import { GoogleCalendarService } from '../shared/services/google-calendar-api-key.service';
 import { UserService } from '../user/services/user.service';
+import { PaymentStatus } from '../order/interfaces/stripe-metadata.interface';
 
 @ApiTags('webhooks')
 @Controller('webhooks')
@@ -38,6 +39,7 @@ export class WebhookController {
     status: HttpStatus.OK,
     description: 'Webhook processed successfully',
   })
+  // eslint-disable-next-line max-statements
   public async handleStripeWebhook(
     @ReqContext() ctx: RequestContext,
     @Req() req: RawBodyRequest<Request>,
@@ -221,7 +223,7 @@ export class WebhookController {
           order.stripe_meta = {
             ...order.stripe_meta,
             checkoutSessionStatus: session.status,
-            paymentStatus: 'succeeded',
+            paymentStatus: PaymentStatus.SUCCEEDED,
             paymentCompletedAt: new Date(),
             lastWebhookEvent: 'checkout.session.completed',
             lastWebhookProcessedAt: new Date(),
@@ -272,7 +274,7 @@ export class WebhookController {
             ...order.stripe_meta,
             paymentIntentId: paymentIntent.id,
             paymentIntentStatus: paymentIntent.status,
-            paymentStatus: 'succeeded',
+            paymentStatus: PaymentStatus.SUCCEEDED,
             paymentMethod: paymentIntent.payment_method,
             paymentCompletedAt: new Date(),
             lastWebhookEvent: 'payment_intent.succeeded',
@@ -313,7 +315,7 @@ export class WebhookController {
             ...order.stripe_meta,
             paymentIntentId: paymentIntent.id,
             paymentIntentStatus: paymentIntent.status,
-            paymentStatus: 'failed',
+            paymentStatus: PaymentStatus.SUCCEEDED,
             paymentFailedAt: new Date(),
             lastWebhookEvent: 'payment_intent.payment_failed',
             lastWebhookProcessedAt: new Date(),

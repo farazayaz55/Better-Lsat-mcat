@@ -44,11 +44,6 @@ export class RegisterInput {
   @IsNotEmpty()
   roles: ROLE[] = [ROLE.USER];
 
-  @ApiProperty({
-    required: false,
-    description: 'GHL User ID (optional, will be generated if not provided)',
-  })
-  @IsOptional()
   ghlUserId?: string;
 
   isAccountDisabled: boolean;

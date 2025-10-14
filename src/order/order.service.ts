@@ -17,6 +17,7 @@ import {
 } from './interfaces/checkout-redirect.interface';
 import { Slot } from './interfaces/slot.interface';
 import {
+  PaymentStatus,
   StripeCheckoutSession,
   StripeMetadata,
   StripePaymentIntent,
@@ -46,7 +47,7 @@ export class OrderService {
 
     // Initialize stripe_meta with default values
     order.stripe_meta = {
-      paymentStatus: 'pending',
+      paymentStatus: PaymentStatus.PENDING,
       lastWebhookProcessedAt: new Date(),
       webhookErrors: [],
     };
@@ -206,11 +207,35 @@ export class OrderService {
   //   return await this.wS.getOrders();
   // }
 
-  async findAll(): Promise<OrderOutput[]> {
-    const orders = await this.repository.find();
-    return plainToInstance(OrderOutput, orders, {
+  async findAll(
+    limit: number,
+    offset: number,
+    orderStatus?: PaymentStatus,
+  ): Promise<{ orders: OrderOutput[]; count: number }> {
+    const queryBuilder = this.repository
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.customer', 'customer');
+
+    // Add payment status filter using proper PostgreSQL JSON syntax
+    if (orderStatus) {
+      queryBuilder.andWhere('o.stripe_meta->>:key = :value', {
+        key: 'paymentStatus',
+        value: orderStatus,
+      });
+    }
+
+    // Add pagination and ordering
+    queryBuilder.skip(offset).take(limit).orderBy('o.id', 'DESC');
+
+    // Get results and count
+    const [orders, count] = await queryBuilder.getManyAndCount();
+
+    // Transform to DTO
+    const ordersOutput = plainToInstance(OrderOutput, orders, {
       excludeExtraneousValues: true,
     });
+
+    return { orders: ordersOutput, count };
   }
 
   async findOne(id: number): Promise<Order | null> {
