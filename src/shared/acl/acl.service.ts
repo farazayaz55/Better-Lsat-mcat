@@ -1,3 +1,5 @@
+/* eslint-disable sonarjs/cognitive-complexity */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { ROLE } from './../../auth/constants/role.constant';
 import { AclRule, RuleCallback } from './acl-rule.constant';
 import { Action } from './action.constant';

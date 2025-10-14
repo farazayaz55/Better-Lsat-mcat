@@ -19,7 +19,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+  // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
   async validate(payload: any): Promise<UserRefreshTokenClaims> {
     // Passport automatically creates a user object, based on the value we return from the validate() method,
     // and assigns it to the Request object as req.user

@@ -5,23 +5,23 @@ import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
 import { GoogleCalendarService } from '../shared/services/google-calendar-api-key.service';
 import { StripeService } from '../shared/services/stripe.service';
-import {
-  IWooCommerceOrder,
-  IWooCommerceOrderResponse,
-} from '../shared/services/interfaces/woocommerce.order.interface';
 import { WooCommerceService } from '../shared/services/WooCommerce.service';
 import { CreateCustomerInput } from '../user/dtos/customer-create-input.dto';
-import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/services/user.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
 import { Order } from './entities/order.entity';
-import { OrderRepository } from './repository/order.repository';
-import { StripeMetadata } from './interfaces/stripe-metadata.interface';
 import {
-  RedirectUrls,
   CheckoutRedirectConfig,
+  RedirectUrls,
 } from './interfaces/checkout-redirect.interface';
+import { Slot } from './interfaces/slot.interface';
+import {
+  StripeCheckoutSession,
+  StripeMetadata,
+  StripePaymentIntent,
+} from './interfaces/stripe-metadata.interface';
+import { OrderRepository } from './repository/order.repository';
 
 @Injectable()
 export class OrderService {
@@ -206,15 +206,18 @@ export class OrderService {
   //   return await this.wS.getOrders();
   // }
 
-  async findAll() {
-    return await this.repository.find();
+  async findAll(): Promise<OrderOutput[]> {
+    const orders = await this.repository.find();
+    return plainToInstance(OrderOutput, orders, {
+      excludeExtraneousValues: true,
+    });
   }
 
   async findOne(id: number): Promise<Order | null> {
     return await this.repository.findOne({ where: { id } });
   }
 
-  update(id: number, _updateOrderDto: OrderInput) {
+  update(id: number, _updateOrderDto: OrderInput): string {
     return `This action updates a #${id} order`;
   }
 
@@ -224,8 +227,7 @@ export class OrderService {
     month: number,
     year: number,
     packageId: number,
-    customerTimezone: string,
-  ) {
+  ): Promise<Slot> {
     const from = new Date(year, month - 1, date, 0, 0, 0); // day start
     const to = new Date(year, month - 1, date, 23, 59, 59, 999); // day end
 
@@ -242,7 +244,7 @@ export class OrderService {
         bookedSlots: [],
         availableSlots: [],
         slotDurationMinutes,
-        message: `No employees available for service ID: ${packageId}`,
+        warning: `No employees available for service ID: ${packageId}`,
       };
     }
 
@@ -252,8 +254,6 @@ export class OrderService {
       month,
       year,
       slotDurationMinutes,
-      customerTimezone,
-      availableEmployees,
       ctx,
     );
 
@@ -279,9 +279,37 @@ export class OrderService {
         from.getTime().toString(),
         to.getTime().toString(),
       );
+      const googleCalendarBookings =
+        await this.googleCalendarService.getBookedSlots(
+          from,
+          to,
+          availableEmployees,
+        );
+
+      const availableSlots = ghlSlots
+        .map((slot) => {
+          const slotBookings = googleCalendarBookings.get(slot) || [];
+          const busyEmployeeIds = slotBookings.map((b) => b.employeeId);
+
+          // Find employees available for this slot
+          const availableForSlot = availableEmployees.filter(
+            (emp) => !busyEmployeeIds.includes(emp.id),
+          );
+
+          return {
+            slot,
+            availableEmployees: availableForSlot.map((emp) => ({
+              id: emp.id,
+              name: emp.name,
+              email: emp.email,
+            })),
+          };
+        })
+        .filter((slotInfo) => slotInfo.availableEmployees.length > 0);
+
       return {
         bookedSlots: [],
-        availableSlots: ghlSlots,
+        availableSlots,
         slotDurationMinutes,
       };
     }
@@ -367,8 +395,6 @@ export class OrderService {
     month: number,
     year: number,
     durationMinutes: number,
-    customerTimezone?: string,
-    availableEmployees?: User[],
     ctx?: RequestContext,
   ): string[] {
     const slots: string[] = [];
@@ -426,7 +452,7 @@ export class OrderService {
   async createStripeCheckoutSession(
     ctx: RequestContext,
     orderId: number | undefined,
-  ): Promise<{ url: string; sessionId: string } | undefined> {
+  ): Promise<StripeCheckoutSession | undefined> {
     if (!orderId) {
       this.logger.error(ctx, 'Invalid order ID passed');
       return;
@@ -451,18 +477,28 @@ export class OrderService {
         order.customer.email,
       );
 
-      if (existingCustomers.length > 0) {
-        stripeCustomer = existingCustomers[0];
-      } else {
-        stripeCustomer = await this.stripeService.createCustomer(ctx, {
-          email: order.customer.email,
-          name: order.customer.name,
-          metadata: {
-            orderId: orderId.toString(),
-            customerId: order.customer.id.toString(),
-          },
-        });
-      }
+      existingCustomers.length > 0
+        ? (stripeCustomer = existingCustomers[0])
+        : (stripeCustomer = await this.stripeService.createCustomer(ctx, {
+            email: order.customer.email,
+            name: order.customer.name,
+            metadata: {
+              orderId: orderId.toString(),
+              customerId: order.customer.id.toString(),
+            },
+          }));
+      // if (existingCustomers.length > 0) {
+      //   stripeCustomer = existingCustomers[0];
+      // } else {
+      //   stripeCustomer = await this.stripeService.createCustomer(ctx, {
+      //     email: order.customer.email,
+      //     name: order.customer.name,
+      //     metadata: {
+      //       orderId: orderId.toString(),
+      //       customerId: order.customer.id.toString(),
+      //     },
+      //   });
+      // }
 
       // Prepare line items for Stripe checkout
       const lineItems = order.items.map((item) => ({
@@ -528,7 +564,7 @@ export class OrderService {
   async createStripePaymentIntent(
     ctx: RequestContext,
     orderId: number | undefined,
-  ): Promise<{ clientSecret: string; paymentIntentId: string } | undefined> {
+  ): Promise<StripePaymentIntent | undefined> {
     if (!orderId) {
       this.logger.error(ctx, 'Invalid order ID passed');
       return;
@@ -553,18 +589,29 @@ export class OrderService {
         order.customer.email,
       );
 
-      if (existingCustomers.length > 0) {
-        stripeCustomer = existingCustomers[0];
-      } else {
-        stripeCustomer = await this.stripeService.createCustomer(ctx, {
-          email: order.customer.email,
-          name: order.customer.name,
-          metadata: {
-            orderId: orderId.toString(),
-            customerId: order.customer.id.toString(),
-          },
-        });
-      }
+      existingCustomers.length > 0
+        ? (stripeCustomer = existingCustomers[0])
+        : (stripeCustomer = await this.stripeService.createCustomer(ctx, {
+            email: order.customer.email,
+            name: order.customer.name,
+            metadata: {
+              orderId: orderId.toString(),
+              customerId: order.customer.id.toString(),
+            },
+          }));
+
+      // if (existingCustomers.length > 0) {
+      //   stripeCustomer = existingCustomers[0];
+      // } else {
+      //   stripeCustomer = await this.stripeService.createCustomer(ctx, {
+      //     email: order.customer.email,
+      //     name: order.customer.name,
+      //     metadata: {
+      //       orderId: orderId.toString(),
+      //       customerId: order.customer.id.toString(),
+      //     },
+      //   });
+      // }
 
       // Create payment intent
       const paymentIntent = await this.stripeService.createPaymentIntent(ctx, {

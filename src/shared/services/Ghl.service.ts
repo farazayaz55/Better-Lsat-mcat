@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/filename-case */
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 
@@ -6,6 +7,13 @@ import { ItemInput } from '../../order/interfaces/item.interface';
 import { UserInput } from '../../order/interfaces/user.interface';
 import { UserService } from '../../user/services/user.service';
 import { RequestContext } from '../request-context/request-context.dto';
+import {
+  IOeleteUserResponse,
+  IGhlUser,
+  IAppointment,
+  ICalendar,
+  IGhlContact,
+} from './interfaces/ghl.interface';
 
 @Injectable()
 export class GhlService {
@@ -14,7 +22,7 @@ export class GhlService {
 
   constructor(private readonly userService: UserService) {}
 
-  async createUser(user: RegisterInput) {
+  async createUser(user: RegisterInput): Promise<IGhlUser> {
     const requestBody = {
       // firstName: 'John',
       // lastName: 'Deo',
@@ -51,7 +59,7 @@ export class GhlService {
     return response.data;
   }
 
-  async deleteUser(userId: string) {
+  async deleteUser(userId: string): Promise<IOeleteUserResponse> {
     const response = await axios
       .delete(`${this.baseUrl}/users/${userId}`, {
         headers: {
@@ -70,7 +78,7 @@ export class GhlService {
     return response.data;
   }
 
-  async getEmployees() {
+  async getEmployees(): Promise<IGhlUser[]> {
     const response = await axios
       .get(`${this.baseUrl}/users/?locationId=${process.env.GHL_LOCATION_ID}`, {
         headers: {
@@ -90,12 +98,15 @@ export class GhlService {
     return data;
   }
 
-  async getEmployee(ctx: RequestContext, id: number) {
+  async getEmployee(
+    ctx: RequestContext,
+    id: number,
+  ): Promise<IGhlUser | undefined> {
     try {
       const user = await this.userService.getUserById(ctx, id);
       const employees = await this.getEmployees();
       const employee = employees.find(
-        (employee: any) => employee.email === user.email,
+        (employee: IGhlUser) => employee.email === user.email,
       );
       return employee;
     } catch (error) {
@@ -108,7 +119,7 @@ export class GhlService {
     ctx: RequestContext,
     appointment: ItemInput,
     contactId: string,
-  ) {
+  ): Promise<IAppointment> {
     if (!appointment.assignedEmployeeId) {
       throw new Error('No employee assigned to this item');
     }
@@ -151,7 +162,7 @@ export class GhlService {
     return response.data;
   }
 
-  async getCalendar() {
+  async getCalendar(): Promise<ICalendar> {
     const response = await axios
       .get(`${this.baseUrl}/calendars/${process.env.GHL_CALENDAR_ID}`, {
         headers: {
@@ -162,6 +173,7 @@ export class GhlService {
           LocationId: process.env.GHL_LOCATION_ID,
         },
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((res: any) => res)
       .catch((error) => {
         console.error(error.response.data);
@@ -170,39 +182,37 @@ export class GhlService {
     return response.data.calendar;
   }
 
-  async addUserToCalendar(user: any) {
+  async addUserToCalendar(user: IGhlUser): Promise<ICalendar> {
     try {
       const calendar = await this.getCalendar();
-      delete calendar.id;
-      delete calendar.locationId;
-      calendar.teamMembers.push({ userId: user.id });
+      // Create a copy without id and locationId for the update
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id: _id, locationId: _locationId, ...calendarUpdate } = calendar;
+      calendarUpdate.teamMembers.push({ userId: user.id });
 
-      await axios
-        .put(
-          `${this.baseUrl}/calendars/${process.env.GHL_CALENDAR_ID}`,
-          calendar,
-          {
-            headers: {
-              Authorization: `Bearer ${this.apiKey}`,
-              Version: '2021-07-28',
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-              LocationId: process.env.GHL_LOCATION_ID,
-            },
+      const response = await axios.put(
+        `${this.baseUrl}/calendars/${process.env.GHL_CALENDAR_ID}`,
+        calendarUpdate,
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            Version: '2021-07-28',
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            LocationId: process.env.GHL_LOCATION_ID,
           },
-        )
-        .then((res) => res)
-        .catch((error) => {
-          console.error(error.response.data);
-          throw new Error('Failed to add user to calendar in GHL');
-        });
+        },
+      );
+
+      return response.data.calendar;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(error);
       throw new Error('Failed to add user to calendar in GHL');
     }
   }
 
-  async getSlots(startDate: string, endDate: string) {
+  async getSlots(startDate: string, endDate: string): Promise<string[]> {
     //looking at mustafa's calendar
     const response = await axios
       .get(
@@ -227,7 +237,7 @@ export class GhlService {
     return data;
   }
 
-  async getContact(email: string) {
+  async getContact(email: string): Promise<IGhlContact | undefined> {
     console.log('getContact called with email:', email);
     const response = await axios
       .get(
@@ -258,7 +268,7 @@ export class GhlService {
     return contact;
   }
 
-  async getAllContacts() {
+  async getAllContacts(): Promise<IGhlContact[]> {
     console.log('getAllContacts called');
     const response = await axios
       .get(
@@ -287,7 +297,7 @@ export class GhlService {
     return response.data.contacts || [];
   }
 
-  async getContactByPhone(phone: string) {
+  async getContactByPhone(phone: string): Promise<IGhlContact | undefined> {
     console.log('getContactByPhone called with phone:', phone);
 
     try {
@@ -300,12 +310,16 @@ export class GhlService {
       );
 
       // Normalize phone number for comparison (remove spaces, dashes, parentheses)
+      // eslint-disable-next-line unicorn/better-regex
       const normalizedPhone = phone.replace(/[\s\-\(\)]/g, '');
 
-      const contact = allContacts.find((contact: any) => {
-        if (!contact.phone) {return false;}
+      const contact = allContacts.find((contact: IGhlContact) => {
+        if (!contact.phone) {
+          return false;
+        }
 
         // Normalize stored phone number for comparison
+        // eslint-disable-next-line unicorn/better-regex
         const normalizedStoredPhone = contact.phone.replace(/[\s\-\(\)]/g, '');
 
         // Check for exact match or if one contains the other
@@ -328,7 +342,8 @@ export class GhlService {
     }
   }
 
-  async getOrCreateContact(user: UserInput) {
+  // eslint-disable-next-line sonarjs/cognitive-complexity
+  async getOrCreateContact(user: UserInput): Promise<IGhlContact> {
     console.log('getOrCreateContact called with:', {
       email: user.email,
       phone: user.phone,
@@ -351,6 +366,7 @@ export class GhlService {
       try {
         contact = await this.createContact(user);
         console.log('Contact created successfully');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         console.log('Contact creation failed:', error.response?.data);
         // If creation fails due to duplicate phone, try to find by phone again
@@ -371,10 +387,10 @@ export class GhlService {
       }
     }
 
-    return contact;
+    return contact as IGhlContact;
   }
 
-  async createContact(user: UserInput) {
+  async createContact(user: UserInput): Promise<IGhlContact> {
     const contactData = {
       firstName: user.firstName,
       lastName: user.lastName,

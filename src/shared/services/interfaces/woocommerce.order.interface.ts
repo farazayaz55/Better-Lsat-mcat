@@ -116,7 +116,7 @@ export interface IWooCommerceTaxLine {
 export interface IWooCommerceResponseMetaData {
   id: number;
   key: string;
-  value: any;
+  value: string;
 }
 
 export interface IWooCommerceTax {
@@ -182,5 +182,5 @@ export interface IWooCommerceFeeLine {
 
 export interface IWooCommerceMetaData {
   key: string;
-  value: any;
+  value: string;
 }

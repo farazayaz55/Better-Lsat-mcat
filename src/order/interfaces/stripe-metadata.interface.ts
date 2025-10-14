@@ -37,3 +37,13 @@ export interface StripeMetadata {
     timestamp: Date;
   }>;
 }
+
+export interface StripeCheckoutSession {
+  url: string;
+  sessionId: string;
+}
+
+export interface StripePaymentIntent {
+  clientSecret: string;
+  paymentIntentId: string;
+}

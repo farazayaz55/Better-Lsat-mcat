@@ -214,29 +214,35 @@ export class RBACGuard implements CanActivate {
     // For now, we'll implement common patterns
 
     switch (resourceType) {
-      case 'users':
+      case 'users': {
         // For users, the owner is the user themselves
-        return resourceId;
 
-      case 'orders':
+        return resourceId;
+      }
+
+      case 'orders': {
         // For orders, we need to check the customer relationship
         // This would query: SELECT customer_id FROM orders WHERE id = ?
         return await this.getOrderCustomerId(resourceId);
+      }
 
-      case 'emails':
+      case 'emails': {
         // For emails, we need to check the recipient relationship
         // This would query: SELECT user_id FROM emails WHERE id = ?
         return await this.getEmailUserId(resourceId);
+      }
 
-      case 'articles':
+      case 'articles': {
         // For articles, we need to check the author relationship
         // This would query: SELECT author_id FROM articles WHERE id = ?
         return await this.getArticleAuthorId(resourceId);
+      }
 
-      default:
+      default: {
         // For unknown resource types, try to find a generic pattern
         // This could be extended to use reflection or configuration
         return await this.getGenericResourceOwnerId(resourceType, resourceId);
+      }
     }
   }
 
@@ -311,7 +317,9 @@ export class RBACGuard implements CanActivate {
           [resourceId],
         );
 
+        // eslint-disable-next-line security/detect-object-injection
         if (result && result.length > 0 && result[0][field]) {
+          // eslint-disable-next-line security/detect-object-injection
           return result[0][field];
         }
       } catch {

@@ -1,4 +1,5 @@
 import { Expose, Type } from 'class-transformer';
+import { UserOutput } from '../../user/dtos/user-output.dto';
 
 export class ItemOutput {
   @Expose()
@@ -32,6 +33,9 @@ export class OrderOutput {
 
   @Expose()
   customerId: number;
+
+  @Expose()
+  customer: UserOutput;
 
   @Expose()
   @Type(() => ItemOutput) // 👈 tell transformer how to map array

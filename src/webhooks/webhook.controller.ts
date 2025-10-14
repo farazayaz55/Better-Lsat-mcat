@@ -75,20 +75,24 @@ export class WebhookController {
       this.logger.log(ctx, `Event created: ${event.created}`);
 
       switch (event.type) {
-        case 'checkout.session.completed':
+        case 'checkout.session.completed': {
           this.logger.log(ctx, '=== HANDLING CHECKOUT SESSION COMPLETED ===');
           await this.handleCheckoutSessionCompleted(ctx, event);
           break;
-        case 'payment_intent.succeeded':
+        }
+        case 'payment_intent.succeeded': {
           this.logger.log(ctx, '=== HANDLING PAYMENT INTENT SUCCEEDED ===');
           await this.handlePaymentIntentSucceeded(ctx, event);
           break;
-        case 'payment_intent.payment_failed':
+        }
+        case 'payment_intent.payment_failed': {
           this.logger.log(ctx, '=== HANDLING PAYMENT INTENT FAILED ===');
           await this.handlePaymentIntentFailed(ctx, event);
           break;
-        default:
+        }
+        default: {
           this.logger.log(ctx, `=== UNHANDLED EVENT TYPE: ${event.type} ===`);
+        }
       }
 
       this.logger.log(ctx, '=== WEBHOOK PROCESSING COMPLETED SUCCESSFULLY ===');
@@ -159,17 +163,21 @@ export class WebhookController {
       this.logger.log(ctx, `Processing test Stripe event: ${testEvent.type}`);
 
       switch (testEvent.type) {
-        case 'checkout.session.completed':
+        case 'checkout.session.completed': {
           await this.handleCheckoutSessionCompleted(ctx, testEvent);
           break;
-        case 'payment_intent.succeeded':
+        }
+        case 'payment_intent.succeeded': {
           await this.handlePaymentIntentSucceeded(ctx, testEvent);
           break;
-        case 'payment_intent.payment_failed':
+        }
+        case 'payment_intent.payment_failed': {
           await this.handlePaymentIntentFailed(ctx, testEvent);
           break;
-        default:
+        }
+        default: {
           this.logger.log(ctx, `Unhandled event type: ${testEvent.type}`);
+        }
       }
 
       return { success: true, message: 'Test webhook processed successfully' };

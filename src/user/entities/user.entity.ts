@@ -8,7 +8,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { Article } from '../../article/entities/article.entity';
 import { Order } from '../../order/entities/order.entity';
 
 @Entity('users')
@@ -62,9 +61,6 @@ export class User {
 
   @UpdateDateColumn({ name: 'updatedAt', nullable: true })
   updatedAt: Date;
-
-  @OneToMany(() => Article, (article) => article.author)
-  articles: Article[];
 
   @OneToMany(() => Order, (order) => order.customer)
   orders: Order[];

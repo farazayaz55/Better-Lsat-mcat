@@ -1,11 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Length,
-  MaxLength,
-} from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ROLE } from '../../auth/constants/role.constant';
 
 export class UpdateUserInput {

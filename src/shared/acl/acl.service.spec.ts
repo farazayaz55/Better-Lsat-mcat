@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { Article } from '../../article/entities/article.entity';
 import { ROLE } from './../../auth/constants/role.constant';
 import { BaseAclService } from './acl.service';
 import { RuleCallback } from './acl-rule.constant';
@@ -41,24 +40,24 @@ describe('AclService', () => {
 
   describe('canDo', () => {
     it('should add acl rule', () => {
-      service.canDo(ROLE.USER, [Action.Read]);
+      service.canDo(ROLE.USER, [Action.READ]);
       const aclRules = service.getAclRules();
       expect(aclRules).toContainEqual({
         role: ROLE.USER,
-        actions: [Action.Read],
+        actions: [Action.READ],
       });
     });
 
     it('should add acl rule with custom rule', () => {
       const ruleCallback = jest.fn();
 
-      service.canDo(ROLE.USER, [Action.Read], ruleCallback);
+      service.canDo(ROLE.USER, [Action.READ], ruleCallback);
 
       const aclRules = service.getAclRules();
 
       expect(aclRules).toContainEqual({
         role: ROLE.USER,
-        actions: [Action.Read],
+        actions: [Action.READ],
         ruleCallback,
       });
     });
@@ -83,37 +82,37 @@ describe('AclService', () => {
     });
 
     it('should return false when no role sepcific rules found', () => {
-      service.canDo(ROLE.USER, [Action.Read]);
+      service.canDo(ROLE.USER, [Action.READ]);
       const userAcl = service.forActor(admin);
-      expect(userAcl.canDoAction(Action.Read)).toBeFalsy();
+      expect(userAcl.canDoAction(Action.READ)).toBeFalsy();
     });
 
     it('should return false when no action sepcific rules found', () => {
-      service.canDo(ROLE.USER, [Action.Read]);
+      service.canDo(ROLE.USER, [Action.READ]);
       const userAcl = service.forActor(user);
-      expect(userAcl.canDoAction(Action.Create)).toBeFalsy();
+      expect(userAcl.canDoAction(Action.READ)).toBeFalsy();
     });
 
     it('should return true when role has action permission', () => {
-      service.canDo(ROLE.USER, [Action.Read]);
+      service.canDo(ROLE.USER, [Action.READ]);
       const userAcl = service.forActor(user);
-      expect(userAcl.canDoAction(Action.Read)).toBeTruthy();
+      expect(userAcl.canDoAction(Action.READ)).toBeTruthy();
     });
 
     it('should return true when ruleCallback is true', () => {
       const customOwnerRule = jest.fn();
       customOwnerRule.mockReturnValue(true);
-      service.canDo(ROLE.USER, [Action.Manage], customOwnerRule);
+      service.canDo(ROLE.USER, [Action.READ], customOwnerRule);
       const userAcl = service.forActor(user);
-      expect(userAcl.canDoAction(Action.Read, new Article())).toBeTruthy();
+      expect(userAcl.canDoAction(Action.READ, new MockResource())).toBeTruthy();
     });
 
     it('should return false when ruleCallback is false', () => {
       const customOwnerRule = jest.fn();
       customOwnerRule.mockReturnValue(false);
-      service.canDo(ROLE.USER, [Action.Manage], customOwnerRule);
+      service.canDo(ROLE.USER, [Action.MANAGE], customOwnerRule);
       const userAcl = service.forActor(user);
-      expect(userAcl.canDoAction(Action.Read, new Article())).toBeFalsy();
+      expect(userAcl.canDoAction(Action.READ, new MockResource())).toBeFalsy();
     });
   });
 });

@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/filename-case */
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 

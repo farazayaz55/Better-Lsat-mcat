@@ -56,6 +56,7 @@ describe('UserController', () => {
     name: 'default-name',
     roles: [ROLE.USER],
     isAccountDisabled: false,
+    phone: '1234567890',
     email: 'e2etester@random.com',
     createdAt: currentDate,
     updatedAt: currentDate,

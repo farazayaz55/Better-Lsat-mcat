@@ -21,7 +21,6 @@ import { ReqContext } from '../../shared/request-context/req-context.decorator';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { GhlService } from '../../shared/services/Ghl.service';
 import { ROLE } from '../constants/role.constant';
-import { Roles } from '../decorators/role.decorator';
 import { LoginInput } from '../dtos/auth-login-input.dto';
 import { RefreshTokenInput } from '../dtos/auth-refresh-token-input.dto';
 import { RegisterInput } from '../dtos/auth-register-input.dto';

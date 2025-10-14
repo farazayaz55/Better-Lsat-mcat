@@ -14,7 +14,7 @@ export class GoogleCalendarService {
     this.initializeGoogleCalendar();
   }
 
-  private async initializeGoogleCalendar() {
+  private async initializeGoogleCalendar(): Promise<void> {
     try {
       // Initialize OAuth2 client for all operations
       this.oauth2Client = new OAuth2Client(
@@ -105,6 +105,7 @@ export class GoogleCalendarService {
     }
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity, max-statements
   private async createEventForDateTime(
     ctx: RequestContext,
     item: any,
@@ -275,6 +276,7 @@ export class GoogleCalendarService {
     }
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity, max-statements
   async getBookedSlots(
     startDate: Date,
     endDate: Date,
@@ -544,7 +546,9 @@ export class GoogleCalendarService {
 
   private parseDuration(duration: string): number {
     const match = duration.match(/(\d+)([hm])/);
-    if (!match) {return 60 * 60 * 1000;} // Default to 1 hour
+    if (!match) {
+      return 60 * 60 * 1000;
+    } // Default to 1 hour
 
     const value = parseInt(match[1]);
     const unit = match[2];

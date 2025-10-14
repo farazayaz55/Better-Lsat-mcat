@@ -7,7 +7,6 @@ import {
   IsString,
   Length,
   MaxLength,
-  ValidateIf,
 } from 'class-validator';
 
 import { ROLE } from '../constants/role.constant';

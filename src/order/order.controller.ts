@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -22,6 +23,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   BaseApiErrorResponse,
+  BaseApiResponse,
   swaggerBaseApiResponse,
 } from '../shared/dtos/base-api-response.dto';
 import { AppLogger } from '../shared/logger/logger.service';
@@ -32,6 +34,12 @@ import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
 import { OrderService } from './order.service';
 import { ConfigService } from '@nestjs/config';
+import {
+  StripeCheckoutSession,
+  StripePaymentIntent,
+} from './interfaces/stripe-metadata.interface';
+import { Slot } from './interfaces/slot.interface';
+import { plainToInstance } from 'class-transformer';
 
 @ApiTags('order')
 @Controller('order')
@@ -65,7 +73,7 @@ export class OrderController {
   async create(
     @ReqContext() ctx: RequestContext,
     @Body() createOrderDto: OrderInput,
-  ) {
+  ): Promise<BaseApiResponse<StripeCheckoutSession | undefined>> {
     const order = await this.orderService.create(ctx, createOrderDto);
     this.logger.log(ctx, `Created order with ID: ${order.id}`);
     const contact = await this.ghlService.getOrCreateContact(
@@ -89,7 +97,7 @@ export class OrderController {
       ctx,
       order.id,
     );
-    return stripeSession;
+    return { data: stripeSession, meta: {} };
   }
 
   @Get()
@@ -103,8 +111,9 @@ export class OrderController {
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  findAll() {
-    return this.orderService.findAll();
+  async findAll(): Promise<BaseApiResponse<OrderOutput[]>> {
+    const orders = await this.orderService.findAll();
+    return { data: orders, meta: {} };
   }
 
   /**get for specific month */
@@ -122,16 +131,23 @@ export class OrderController {
     @Query('month') month: number,
     @Query('year') year: number,
     @Query('packageId') packageId: number,
-    @Query('customerTimezone') timezone: string,
-  ) {
-    return await this.orderService.getSlotsBooked(
+  ): Promise<BaseApiResponse<Slot>> {
+    const slotsBooked = await this.orderService.getSlotsBooked(
       ctx,
       date,
       month,
       year,
       packageId,
-      timezone,
     );
+    return { data: slotsBooked, meta: {} };
+    // return await this.orderService.getSlotsBooked(
+    //   ctx,
+    //   date,
+    //   month,
+    //   year,
+    //   packageId,
+    //   timezone,
+    // );
   }
 
   @Get(':id')
@@ -149,13 +165,20 @@ export class OrderController {
   @UseInterceptors(ClassSerializerInterceptor)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  findOne(@Param('id') id: string) {
-    return this.orderService.findOne(+id);
+  async findOne(
+    @Param('id') id: string,
+  ): Promise<BaseApiResponse<OrderOutput>> {
+    const order = await this.orderService.findOne(+id);
+    if (!order) {
+      throw new NotFoundException();
+    }
+    const orderOutput = plainToInstance(OrderOutput, order);
+    return { data: orderOutput, meta: {} };
   }
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update order API',
+    summary: 'Update order API (Place holder api)',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -164,7 +187,8 @@ export class OrderController {
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  update(@Param('id') id: string, @Body() updateOrderDto: OrderInput) {
+  update(@Param('id') id: string, @Body() updateOrderDto: OrderInput): string {
+    //place holder api.
     return this.orderService.update(+id, updateOrderDto);
   }
 
@@ -178,8 +202,12 @@ export class OrderController {
   @UseInterceptors(ClassSerializerInterceptor)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  remove(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
-    return this.orderService.remove(ctx, +id);
+  async remove(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+  ): Promise<BaseApiResponse<void>> {
+    const data = await this.orderService.remove(ctx, +id);
+    return { data, meta: {} };
   }
 
   @Post(':id/stripe/checkout')
@@ -193,8 +221,9 @@ export class OrderController {
   async createStripeCheckout(
     @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
-  ) {
-    return this.orderService.createStripeCheckoutSession(ctx, +id);
+  ): Promise<BaseApiResponse<StripeCheckoutSession | undefined>> {
+    const data = await this.orderService.createStripeCheckoutSession(ctx, +id);
+    return { data, meta: {} };
   }
 
   @Post(':id/stripe/payment-intent')
@@ -208,8 +237,9 @@ export class OrderController {
   async createStripePaymentIntent(
     @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
-  ) {
-    return this.orderService.createStripePaymentIntent(ctx, +id);
+  ): Promise<BaseApiResponse<StripePaymentIntent | undefined>> {
+    const data = await this.orderService.createStripePaymentIntent(ctx, +id);
+    return { data, meta: {} };
   }
 
   @Post('stripe/confirm-payment')
@@ -223,7 +253,11 @@ export class OrderController {
   async confirmStripePayment(
     @ReqContext() ctx: RequestContext,
     @Body() body: { paymentIntentId: string },
-  ) {
-    return this.orderService.confirmStripePayment(ctx, body.paymentIntentId);
+  ): Promise<BaseApiResponse<boolean>> {
+    const data = await this.orderService.confirmStripePayment(
+      ctx,
+      body.paymentIntentId,
+    );
+    return { data, meta: {} };
   }
 }
