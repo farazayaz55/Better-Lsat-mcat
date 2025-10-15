@@ -10,6 +10,7 @@ import { Order } from './entities/order.entity';
 import { OrderController } from './order.controller';
 import { OrderService } from './order.service';
 import { OrderRepository } from './repository/order.repository';
+import { ReservationCleanupService } from './reservation-cleanup.service';
 
 @Module({
   imports: [
@@ -25,7 +26,8 @@ import { OrderRepository } from './repository/order.repository';
     WooCommerceService,
     GhlService,
     StripeService,
+    ReservationCleanupService,
   ],
-  exports: [OrderService],
+  exports: [OrderService, ReservationCleanupService],
 })
 export class OrderModule {}

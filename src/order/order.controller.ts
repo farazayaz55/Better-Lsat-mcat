@@ -34,6 +34,7 @@ import { GhlService } from '../shared/services/Ghl.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
 import { OrderService } from './order.service';
+import { ReservationCleanupService } from './reservation-cleanup.service';
 import { ConfigService } from '@nestjs/config';
 import { PaginationParamsDto as PaginationParametersDto } from '../shared/dtos/pagination-params.dto';
 import {
@@ -52,6 +53,7 @@ export class OrderController {
     private readonly logger: AppLogger,
     private readonly ghlService: GhlService,
     private readonly configService: ConfigService,
+    private readonly reservationCleanupService: ReservationCleanupService,
   ) {
     this.logger.setContext(OrderController.name);
   }
@@ -278,6 +280,57 @@ export class OrderController {
       ctx,
       body.paymentIntentId,
     );
+    return { data, meta: {} };
+  }
+
+  @Post('cleanup/reservations')
+  @ApiOperation({
+    summary: 'Manually run reservation cleanup job (for testing/debugging)',
+    description:
+      'Note: Cleanup runs automatically every 5 minutes via cron job. This endpoint is for manual testing only.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Returns cleanup results',
+  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async runReservationCleanup(@ReqContext() ctx: RequestContext): Promise<
+    BaseApiResponse<{
+      expiredCount: number;
+      stats: {
+        total: number;
+        reserved: number;
+        confirmed: number;
+        expired: number;
+      };
+    }>
+  > {
+    const data = await this.reservationCleanupService.runCleanupJob(ctx);
+    return { data, meta: {} };
+  }
+
+  @Get('cleanup/stats')
+  @ApiOperation({
+    summary: 'Get reservation statistics (for monitoring)',
+    description:
+      'Returns current reservation statistics. Cleanup runs automatically every 5 minutes.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Returns reservation statistics',
+  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async getReservationStats(@ReqContext() ctx: RequestContext): Promise<
+    BaseApiResponse<{
+      total: number;
+      reserved: number;
+      confirmed: number;
+      expired: number;
+    }>
+  > {
+    const data = await this.reservationCleanupService.getReservationStats(ctx);
     return { data, meta: {} };
   }
 }

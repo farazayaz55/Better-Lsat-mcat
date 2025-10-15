@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
@@ -7,6 +8,7 @@ import { GoogleCalendarService } from '../shared/services/google-calendar-api-ke
 import { StripeService } from '../shared/services/stripe.service';
 import { WooCommerceService } from '../shared/services/WooCommerce.service';
 import { CreateCustomerInput } from '../user/dtos/customer-create-input.dto';
+import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/services/user.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
@@ -34,6 +36,7 @@ export class OrderService {
     private readonly ghlService: GhlService,
     private readonly stripeService: StripeService,
     private readonly googleCalendarService: GoogleCalendarService,
+    private readonly configService: ConfigService,
   ) {
     this.logger.setContext(OrderService.name);
   }
@@ -60,6 +63,9 @@ export class OrderService {
       phone: createOrderDto.user.phone,
     } as CreateCustomerInput);
     order.customerId = customer.id;
+
+    // Validate slot availability and create reservations
+    await this.validateAndReserveSlots(ctx, order, createOrderDto.items);
 
     // Assign employees per item using round-robin
     if (createOrderDto.items && createOrderDto.items.length > 0) {
@@ -246,6 +252,15 @@ export class OrderService {
     return `This action updates a #${id} order`;
   }
 
+  /**
+   * Updates an order with partial data
+   * @param id Order ID
+   * @param updateData Partial order data to update
+   */
+  async updateOrder(id: number, updateData: Partial<Order>): Promise<void> {
+    await this.repository.update(id, updateData);
+  }
+
   async getSlotsBooked(
     ctx: RequestContext,
     date: number,
@@ -283,17 +298,28 @@ export class OrderService {
     );
 
     if (!packageId) {
-      // If no specific service ID, return all available slots
+      // Filter slots by working hours and return available slots
+      const availableSlots = generatedSlots
+        .map((slot) => {
+          // Find employees who are available during their working hours
+          const availableForSlot = availableEmployees.filter((emp) =>
+            this.isEmployeeAvailableAtTime(emp, slot),
+          );
+
+          return {
+            slot,
+            availableEmployees: availableForSlot.map((emp) => ({
+              id: emp.id,
+              name: emp.name,
+              email: emp.email,
+            })),
+          };
+        })
+        .filter((slotInfo) => slotInfo.availableEmployees.length > 0);
+
       return {
         bookedSlots: [],
-        availableSlots: generatedSlots.map((slot) => ({
-          slot,
-          availableEmployees: availableEmployees.map((emp) => ({
-            id: emp.id,
-            name: emp.name,
-            email: emp.email,
-          })),
-        })),
+        availableSlots,
         slotDurationMinutes,
       };
     }
@@ -316,9 +342,11 @@ export class OrderService {
           const slotBookings = googleCalendarBookings.get(slot) || [];
           const busyEmployeeIds = slotBookings.map((b) => b.employeeId);
 
-          // Find employees available for this slot
+          // Find employees available for this slot (working hours + not busy)
           const availableForSlot = availableEmployees.filter(
-            (emp) => !busyEmployeeIds.includes(emp.id),
+            (emp) =>
+              !busyEmployeeIds.includes(emp.id) &&
+              this.isEmployeeAvailableAtTime(emp, slot),
           );
 
           return {
@@ -339,7 +367,7 @@ export class OrderService {
       };
     }
 
-    // For other packages, use Google Calendar integration
+    // For other packages, use Google Calendar integration + database reservations
     try {
       // Get booked slots from Google Calendar
       const googleCalendarBookings =
@@ -349,15 +377,33 @@ export class OrderService {
           availableEmployees,
         );
 
-      // Filter available slots (at least one employee must be free)
+      // Get database reservations (confirmed and active reservations)
+      const databaseReservations = await this.getDatabaseReservations(
+        ctx,
+        from,
+        to,
+        packageId,
+      );
+
+      // Filter available slots (working hours + availability)
       const availableSlots = generatedSlots
         .map((slot) => {
           const slotBookings = googleCalendarBookings.get(slot) || [];
           const busyEmployeeIds = slotBookings.map((b) => b.employeeId);
 
-          // Find employees available for this slot
+          // Add database reservations to busy employees
+          const slotReservations = databaseReservations.get(slot) || [];
+          const reservedEmployeeIds = slotReservations.map((r) => r.employeeId);
+          const allBusyEmployeeIds = [
+            ...busyEmployeeIds,
+            ...reservedEmployeeIds,
+          ];
+
+          // Find employees available for this slot (working hours + not busy)
           const availableForSlot = availableEmployees.filter(
-            (emp) => !busyEmployeeIds.includes(emp.id),
+            (emp) =>
+              !allBusyEmployeeIds.includes(emp.id) &&
+              this.isEmployeeAvailableAtTime(emp, slot),
           );
 
           return {
@@ -371,11 +417,27 @@ export class OrderService {
         })
         .filter((slotInfo) => slotInfo.availableEmployees.length > 0);
 
-      // Find completely booked slots (all employees busy)
+      // Find completely booked slots (all employees busy OR outside working hours)
       const bookedSlots = generatedSlots.filter((slot) => {
         const slotBookings = googleCalendarBookings.get(slot) || [];
         const busyEmployeeIds = slotBookings.map((b) => b.employeeId);
-        return busyEmployeeIds.length === availableEmployees.length;
+        const slotReservations = databaseReservations.get(slot) || [];
+        const reservedEmployeeIds = slotReservations.map((r) => r.employeeId);
+        const allBusyEmployeeIds = [...busyEmployeeIds, ...reservedEmployeeIds];
+
+        // Check if all employees are either busy or outside working hours
+        const employeesInWorkingHours = availableEmployees.filter((emp) =>
+          this.isEmployeeAvailableAtTime(emp, slot),
+        );
+
+        const busyEmployeesInWorkingHours = employeesInWorkingHours.filter(
+          (emp) => allBusyEmployeeIds.includes(emp.id),
+        );
+
+        return (
+          busyEmployeesInWorkingHours.length ===
+            employeesInWorkingHours.length && employeesInWorkingHours.length > 0
+        );
       });
 
       this.logger.log(
@@ -398,17 +460,27 @@ export class OrderService {
         }`,
       );
 
-      // Fallback: return all slots as available
+      // Fallback: return slots filtered by working hours only
+      const availableSlots = generatedSlots
+        .map((slot) => {
+          const availableForSlot = availableEmployees.filter((emp) =>
+            this.isEmployeeAvailableAtTime(emp, slot),
+          );
+
+          return {
+            slot,
+            availableEmployees: availableForSlot.map((emp) => ({
+              id: emp.id,
+              name: emp.name,
+              email: emp.email,
+            })),
+          };
+        })
+        .filter((slotInfo) => slotInfo.availableEmployees.length > 0);
+
       return {
         bookedSlots: [],
-        availableSlots: generatedSlots.map((slot) => ({
-          slot,
-          availableEmployees: availableEmployees.map((emp) => ({
-            id: emp.id,
-            name: emp.name,
-            email: emp.email,
-          })),
-        })),
+        availableSlots,
         slotDurationMinutes,
         warning: 'Unable to check Google Calendar availability',
       };
@@ -424,39 +496,71 @@ export class OrderService {
   ): string[] {
     const slots: string[] = [];
 
-    // Fixed business hours: 8AM-8PM Canadian time
-    const startHour = 8;
-    const endHour = 20;
-
-    // Generate slots for the entire day
-    for (let hour = startHour; hour < endHour; hour++) {
+    // Generate slots for ALL 24 hours (0-23)
+    for (let hour = 0; hour < 24; hour++) {
       for (let minute = 0; minute < 60; minute += durationMinutes) {
-        // Create date in Canadian timezone
         const slotDate = new Date(year, month - 1, date, hour, minute);
-
-        // Convert to Canadian timezone to ensure we're within business hours
-        const canadianTime = new Date(
-          slotDate.toLocaleString('en-US', { timeZone: 'America/Toronto' }),
-        );
-
-        // Only add if it's still within business hours
-        if (
-          canadianTime.getHours() >= startHour &&
-          canadianTime.getHours() < endHour
-        ) {
-          slots.push(slotDate.toISOString());
-        }
+        slots.push(slotDate.toISOString());
       }
     }
 
     if (ctx) {
       this.logger.log(
         ctx,
-        `Generated ${slots.length} time slots for ${date}/${month}/${year} (${durationMinutes}min intervals)`,
+        `Generated ${slots.length} time slots for ${date}/${month}/${year} (${durationMinutes}min intervals) - 24 hours`,
       );
     }
 
     return slots;
+  }
+
+  // Helper method to get day name from day number
+  private getDayOfWeekName(dayNumber: number): string {
+    const days = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ];
+    return days[dayNumber];
+  }
+
+  // Helper method to check if employee is available at specific time based on workHours
+  private isEmployeeAvailableAtTime(employee: User, slotTime: string): boolean {
+    const slotDate = new Date(slotTime);
+    const dayOfWeek = this.getDayOfWeekName(slotDate.getDay());
+    const slotHour = slotDate.getHours();
+    const slotMinute = slotDate.getMinutes();
+    const slotTimeInMinutes = slotHour * 60 + slotMinute;
+
+    // Get employee's working hours for this day
+    const dayWorkHours = employee.workHours?.[dayOfWeek] || [];
+
+    if (dayWorkHours.length === 0) {
+      return false; // No working hours defined for this day
+    }
+
+    // Check if slot time falls within any working hour range
+    for (const timeRange of dayWorkHours) {
+      const [startTime, endTime] = timeRange.split('-');
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+
+      const startTimeInMinutes = startHour * 60 + startMin;
+      const endTimeInMinutes = endHour * 60 + endMin;
+
+      if (
+        slotTimeInMinutes >= startTimeInMinutes &&
+        slotTimeInMinutes < endTimeInMinutes
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   async remove(ctx: RequestContext, id: number): Promise<void> {
@@ -541,15 +645,41 @@ export class OrderService {
       // Generate redirect URLs
       const redirectUrls = this.generateRedirectUrls(orderId);
 
-      // Create checkout session with configurable redirect URLs
+      // Calculate expiration time for Stripe session
+      // Stripe requires minimum 30 minutes, so we use the longer of:
+      // 1. Slot reservation expiration time, or
+      // 2. 30 minutes from now
+      const slotExpirationTime = order.slot_reservation_expires_at
+        ? Math.floor(order.slot_reservation_expires_at.getTime() / 1000)
+        : Math.floor(Date.now() / 1000) + 30 * 60;
+
+      const minimumStripeExpiration = Math.floor(Date.now() / 1000) + 30 * 60; // 30 minutes from now
+      const expiresAt = Math.max(slotExpirationTime, minimumStripeExpiration);
+
+      this.logger.log(
+        ctx,
+        `Creating Stripe checkout session with expiration: ${new Date(expiresAt * 1000).toISOString()}`,
+      );
+
+      if (slotExpirationTime < minimumStripeExpiration) {
+        this.logger.log(
+          ctx,
+          `Slot reservation expires at ${new Date(slotExpirationTime * 1000).toISOString()}, but Stripe session extended to ${new Date(expiresAt * 1000).toISOString()} (minimum 30 minutes)`,
+        );
+      }
+
+      // Create checkout session with configurable redirect URLs and expiration
       const session = await this.stripeService.createCheckoutSession(ctx, {
         lineItems,
         customerEmail: order.customer.email,
         successUrl: redirectUrls.success,
         cancelUrl: redirectUrls.cancel,
+        expiresAt, // Sync with slot reservation timeout
         metadata: {
           orderId: orderId.toString(),
           customerId: order.customer.id.toString(),
+          slotReservationExpiresAt:
+            order.slot_reservation_expires_at?.toISOString(),
         },
       });
 
@@ -693,6 +823,215 @@ export class OrderService {
         `Failed to confirm payment: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       return false;
+    }
+  }
+
+  /**
+   * Validates slot availability and creates reservations for the order
+   * @param ctx Request context
+   * @param order The order being created
+   * @param items The items in the order
+   */
+  private async validateAndReserveSlots(
+    ctx: RequestContext,
+    order: Order,
+    items: any[],
+  ): Promise<void> {
+    this.logger.log(ctx, 'Starting slot validation and reservation process');
+
+    // Get reservation timeout from config (default 30 minutes)
+    const reservationTimeoutMinutes = this.configService.get<number>(
+      'SLOT_RESERVATION_TIMEOUT_MINUTES',
+      30,
+    );
+
+    // Calculate expiration time
+    const expiresAt = new Date(
+      Date.now() + reservationTimeoutMinutes * 60 * 1000,
+    );
+
+    // Set reservation details on the order
+    order.slot_reservation_expires_at = expiresAt;
+    order.slot_reservation_status = 'RESERVED';
+
+    this.logger.log(
+      ctx,
+      `Order will reserve slots until: ${expiresAt.toISOString()} (${reservationTimeoutMinutes} minutes)`,
+    );
+
+    // Validate each item's slots
+    for (const item of items) {
+      if (item.DateTime && item.DateTime.length > 0) {
+        for (const dateTime of item.DateTime) {
+          const isAvailable = await this.validateSlotAvailability(
+            ctx,
+            dateTime,
+            item.id,
+          );
+
+          if (!isAvailable) {
+            throw new Error(
+              `Slot ${dateTime} for service ${item.id} is no longer available`,
+            );
+          }
+        }
+      }
+    }
+
+    this.logger.log(
+      ctx,
+      'All slots validated successfully - reservation created',
+    );
+  }
+
+  /**
+   * Validates if a specific slot is available (not booked or reserved)
+   * @param ctx Request context
+   * @param dateTime The slot datetime to check
+   * @param serviceId The service ID
+   * @returns true if available, false if not
+   */
+  private async validateSlotAvailability(
+    ctx: RequestContext,
+    dateTime: string,
+    serviceId: number,
+  ): Promise<boolean> {
+    try {
+      this.logger.log(
+        ctx,
+        `Validating slot availability: ${dateTime} for service ${serviceId}`,
+      );
+
+      // Check for confirmed bookings (paid orders)
+      const confirmedBookings = await this.repository
+        .createQueryBuilder('o')
+        .where('o.slot_reservation_status = :status', {
+          status: 'CONFIRMED',
+        })
+        .andWhere('o.items::text LIKE :dateTime', {
+          dateTime: `%${dateTime}%`,
+        })
+        .getCount();
+
+      if (confirmedBookings > 0) {
+        this.logger.warn(ctx, `Slot ${dateTime} is already confirmed (booked)`);
+        return false;
+      }
+
+      // Check for active reservations (unpaid orders with valid expiration)
+      const activeReservations = await this.repository
+        .createQueryBuilder('o')
+        .where('o.slot_reservation_status = :status', {
+          status: 'RESERVED',
+        })
+        .andWhere('o.slot_reservation_expires_at > :now', {
+          now: new Date(),
+        })
+        .andWhere('o.items::text LIKE :dateTime', {
+          dateTime: `%${dateTime}%`,
+        })
+        .getCount();
+
+      if (activeReservations > 0) {
+        this.logger.warn(
+          ctx,
+          `Slot ${dateTime} is currently reserved by another customer`,
+        );
+        return false;
+      }
+
+      this.logger.log(ctx, `Slot ${dateTime} is available`);
+      return true;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Error validating slot availability: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Gets database reservations for a specific date range and service
+   * @param ctx Request context
+   * @param from Start date
+   * @param to End date
+   * @param serviceId Service ID
+   * @returns Map of slot times to reservation data
+   */
+  private async getDatabaseReservations(
+    ctx: RequestContext,
+    from: Date,
+    to: Date,
+    serviceId: number,
+  ): Promise<Map<string, Array<{ employeeId: number; status: string }>>> {
+    try {
+      this.logger.log(
+        ctx,
+        `Getting database reservations for service ${serviceId} from ${from.toISOString()} to ${to.toISOString()}`,
+      );
+
+      // Query orders with confirmed or active reservations
+      const reservations = await this.repository
+        .createQueryBuilder('o')
+        .where('o.slot_reservation_status IN (:...statuses)', {
+          statuses: ['CONFIRMED', 'RESERVED'],
+        })
+        .andWhere('o.slot_reservation_expires_at > :now', {
+          now: new Date(),
+        })
+        .andWhere('o.items::text LIKE :serviceId', {
+          serviceId: `%${serviceId}%`,
+        })
+        .getMany();
+
+      const reservationMap = new Map<
+        string,
+        Array<{ employeeId: number; status: string }>
+      >();
+
+      for (const order of reservations) {
+        if (order.items && Array.isArray(order.items)) {
+          for (const item of order.items) {
+            if (
+              item.id === serviceId &&
+              item.DateTime &&
+              Array.isArray(item.DateTime)
+            ) {
+              for (const dateTime of item.DateTime) {
+                const slotTime = new Date(dateTime);
+
+                // Check if this slot is within our date range
+                if (slotTime >= from && slotTime <= to) {
+                  const slotKey = slotTime.toISOString();
+
+                  if (!reservationMap.has(slotKey)) {
+                    reservationMap.set(slotKey, []);
+                  }
+
+                  reservationMap.get(slotKey)!.push({
+                    employeeId: item.assignedEmployeeId || 0,
+                    status: order.slot_reservation_status || 'UNKNOWN',
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      this.logger.log(
+        ctx,
+        `Found ${reservations.length} database reservations affecting ${reservationMap.size} slots`,
+      );
+
+      return reservationMap;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Error getting database reservations: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      return new Map();
     }
   }
 }
