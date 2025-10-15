@@ -33,6 +33,7 @@ export interface StripeCheckoutSessionData {
   customerEmail: string;
   successUrl: string;
   cancelUrl: string;
+  expiresAt?: number; // Unix timestamp for session expiration
   metadata?: Record<string, string>;
 }
 
@@ -120,7 +121,7 @@ export class StripeService {
     );
 
     try {
-      const session = await this.stripe.checkout.sessions.create({
+      const sessionConfig: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ['card'],
         line_items: sessionData.lineItems,
         mode: 'payment',
@@ -128,7 +129,18 @@ export class StripeService {
         success_url: sessionData.successUrl,
         cancel_url: sessionData.cancelUrl,
         metadata: sessionData.metadata,
-      });
+      };
+
+      // Add expiration if provided
+      if (sessionData.expiresAt) {
+        sessionConfig.expires_at = sessionData.expiresAt;
+        this.logger.log(
+          ctx,
+          `Setting checkout session expiration to: ${new Date(sessionData.expiresAt * 1000).toISOString()}`,
+        );
+      }
+
+      const session = await this.stripe.checkout.sessions.create(sessionConfig);
 
       this.logger.log(ctx, `Checkout session created with ID: ${session.id}`);
       return session;

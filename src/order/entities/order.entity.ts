@@ -28,4 +28,15 @@ export class Order {
 
   @Column({ type: 'json', nullable: true })
   stripe_meta: StripeMetadata;
+
+  @Column({ type: 'timestamp', nullable: true })
+  slot_reservation_expires_at: Date;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'RESERVED',
+    nullable: true,
+  })
+  slot_reservation_status: 'RESERVED' | 'CONFIRMED' | 'EXPIRED';
 }

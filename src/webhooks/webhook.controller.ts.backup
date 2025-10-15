@@ -192,10 +192,8 @@ export class WebhookController {
     }
   }
 
-  // eslint-disable-next-line max-statements
   public async handleCheckoutSessionCompleted(
     ctx: RequestContext,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     event: any,
   ): Promise<void> {
     const session = event.data.object;
@@ -221,19 +219,6 @@ export class WebhookController {
             ctx,
             `Order details: ID=${order.id}, CustomerID=${order.customerId}, Items=${order.items?.length || 0}`,
           );
-          // Validate slot reservation before confirming payment
-          const reservationValid = await this.validateSlotReservation(
-            ctx,
-            order,
-          );
-          if (!reservationValid) {
-            this.logger.error(
-              ctx,
-              `Order ${orderId} payment succeeded but slot reservation is no longer valid - initiating refund`,
-            );
-            // TODO: Implement refund logic here
-            return;
-          }
           // Update stripe_meta with completion information
           order.stripe_meta = {
             ...order.stripe_meta,
@@ -245,10 +230,6 @@ export class WebhookController {
           };
 
           await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
-          });
 
           this.logger.log(
             ctx,
@@ -256,6 +237,10 @@ export class WebhookController {
           );
 
           // Create Google Calendar events for non-GHL items after successful payment
+          this.logger.log(
+            ctx,
+            `=== STARTING GOOGLE CALENDAR EVENT CREATION ===`,
+          );
           await this.createGoogleCalendarEvents(ctx, order);
           this.logger.log(
             ctx,
@@ -284,19 +269,6 @@ export class WebhookController {
       try {
         const order = await this.orderService.findOne(parseInt(orderId));
         if (order) {
-          // Validate slot reservation before confirming payment
-          const reservationValid = await this.validateSlotReservation(
-            ctx,
-            order,
-          );
-          if (!reservationValid) {
-            this.logger.error(
-              ctx,
-              `Order ${orderId} payment succeeded but slot reservation is no longer valid - initiating refund`,
-            );
-            // TODO: Implement refund logic here
-            return;
-          }
           // Update stripe_meta with payment intent information
           order.stripe_meta = {
             ...order.stripe_meta,
@@ -310,14 +282,6 @@ export class WebhookController {
           };
 
           await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
-          });
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
-          });
 
           this.logger.log(
             ctx,
@@ -367,14 +331,6 @@ export class WebhookController {
           };
 
           await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
-          });
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
-          });
 
           this.logger.log(ctx, `Order ${orderId} payment failed`);
         }
@@ -482,13 +438,13 @@ export class WebhookController {
     order: any,
   ): Promise<boolean> {
     try {
-      this.logger.log(ctx, `Validating slot reservation for order ${order.id}`);
+      this.logger.log(
+        ctx,
+        `Validating slot reservation for order ${order.id}`,
+      );
 
       // Check if order has reservation data
-      if (
-        !order.slot_reservation_expires_at ||
-        !order.slot_reservation_status
-      ) {
+      if (!order.slot_reservation_expires_at || !order.slot_reservation_status) {
         this.logger.warn(
           ctx,
           `Order ${order.id} has no slot reservation data - treating as valid (legacy order)`,
