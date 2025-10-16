@@ -103,7 +103,7 @@ export class AuthController {
         );
       }
 
-      let ghlUser = null;
+      const ghlUser = null;
 
       // Step 1: Create user in GHL (if USER role)
       if (input.roles.includes(ROLE.USER)) {
@@ -112,10 +112,11 @@ export class AuthController {
           ctx,
           `DEBUG - Before GHL creation, input name: "${input.name}"`,
         );
-        ghlUser = await this.ghlService.createUser(input);
+        //stop creating accounts on GHL for now
+        // ghlUser = await this.ghlService.createUser(input);
 
         this.logger.log(ctx, 'Adding user to calendar');
-        await this.ghlService.addUserToCalendar(ghlUser);
+        // await this.ghlService.addUserToCalendar(ghlUser);
       }
 
       // Step 2: Create user in database
@@ -124,7 +125,7 @@ export class AuthController {
         ctx,
         `DEBUG - Before database creation, input name: "${input.name}"`,
       );
-      input.ghlUserId = ghlUser?.id;
+      // input.ghlUserId = ghlUser?.id;
       this.logger.log(
         ctx,
         `DEBUG - After setting ghlUserId, input name: "${input.name}"`,

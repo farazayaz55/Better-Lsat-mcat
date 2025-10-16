@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiExtraModels,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -44,9 +45,13 @@ import {
 } from './interfaces/stripe-metadata.interface';
 import { Slot } from './interfaces/slot.interface';
 import { plainToInstance } from 'class-transformer';
+import { SlotsQueryDto } from './dto/slots.query.dto';
+import { GetOrdersQueryParams } from './interfaces/get-orders-query.interface';
 
 @ApiTags('order')
 @Controller('order')
+@ApiExtraModels(SlotsQueryDto)
+@ApiExtraModels(GetOrdersQueryParams)
 export class OrderController {
   constructor(
     private readonly orderService: OrderService,
@@ -124,13 +129,12 @@ export class OrderController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   async findAll(
-    @Query() query: PaginationParametersDto,
-    @Query('orderStatus') orderStatus?: PaymentStatus,
+    @Query() query: GetOrdersQueryParams,
   ): Promise<BaseApiResponse<OrderOutput[]>> {
     const { orders, count } = await this.orderService.findAll(
       query.limit,
       query.offset,
-      orderStatus,
+      query.orderStatus,
     );
     return { data: orders, meta: { count } };
   }
@@ -142,21 +146,20 @@ export class OrderController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
+    type: swaggerBaseApiResponse(Slot),
+    description: 'Available and booked slots for the specified date',
   })
   // @UseInterceptors(ClassSerializerInterceptor)
   async findBookings(
     @ReqContext() ctx: RequestContext,
-    @Query('date') date: number,
-    @Query('month') month: number,
-    @Query('year') year: number,
-    @Query('packageId') packageId: number,
+    @Query() query: SlotsQueryDto,
   ): Promise<BaseApiResponse<Slot>> {
     const slotsBooked = await this.orderService.getSlotsBooked(
       ctx,
-      date,
-      month,
-      year,
-      packageId,
+      query.date,
+      query.month,
+      query.year,
+      query.packageId,
     );
     return { data: slotsBooked, meta: {} };
     // return await this.orderService.getSlotsBooked(
@@ -200,11 +203,14 @@ export class OrderController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update order API (Place holder api)',
+    summary: 'Update order API (Placeholder)',
+    description:
+      'Updates an existing order - currently returns placeholder response',
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    type: swaggerBaseApiResponse(OrderOutput),
+    description: 'Order update placeholder response',
+    type: String,
   })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()

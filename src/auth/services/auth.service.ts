@@ -107,6 +107,7 @@ export class AuthService {
       email: input.email,
       isAccountDisabled: input.isAccountDisabled,
       ghlUserId: input.ghlUserId,
+      workHours: input.workHours,
     };
 
     this.logger.log(

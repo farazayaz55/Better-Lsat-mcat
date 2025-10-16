@@ -1,11 +1,36 @@
 import { Type } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class MetaResponse {
+  @ApiPropertyOptional({
+    description: 'Current page number',
+    example: 1,
+    type: Number,
+  })
+  page?: number;
+
+  @ApiPropertyOptional({
+    description: 'Number of items per page',
+    example: 10,
+    type: Number,
+  })
+  limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Total number of items',
+    example: 100,
+    type: Number,
+  })
+  total?: number;
+
+  [key: string]: unknown;
+}
+
 export class BaseApiResponse<T> {
   public data: T; // Swagger Decorator is added in the extended class below, since that will override this one.
 
   @ApiProperty({ type: Object })
-  public meta: Record<string, unknown>;
+  public meta: MetaResponse;
 }
 
 type ApiPropertyType =
@@ -20,7 +45,7 @@ export function swaggerBaseApiResponse<T extends ApiPropertyType>(
 ): typeof BaseApiResponse {
   class ExtendedBaseApiResponse<T> extends BaseApiResponse<T> {
     @ApiProperty({ type }) // Casting `type` to `any` to bypass type checking for now
-    public declare data: T;
+    declare public data: T;
   }
   // NOTE : Overwrite the returned class name, otherwise whichever type calls this function in the last,
   // will overwrite all previous definitions. i.e., Swagger will have all response types as the same one.

@@ -205,7 +205,9 @@ export class UserController {
       if (user.roles.includes(ROLE.USER)) {
         const ghlUserId = await this.userService.getGhlIdByUserId(ctx, userId);
         this.logger.log(ctx, `Deleting contact from GHL ${ghlUserId}`);
-        await this.ghlService.deleteUser(ghlUserId);
+        if (ghlUserId) {
+          await this.ghlService.deleteUser(ghlUserId);
+        }
       }
 
       // Step 1: Delete user from database

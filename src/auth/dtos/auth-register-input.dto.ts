@@ -1,7 +1,8 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsPhoneNumber,
   IsString,
@@ -28,11 +29,11 @@ export class RegisterInput {
   @IsString()
   username: string;
 
-  @ApiProperty()
-  @IsNotEmpty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @Length(6, 100)
   @IsString()
-  password: string;
+  password?: string;
 
   @ApiProperty()
   @IsNotEmpty()
@@ -40,9 +41,30 @@ export class RegisterInput {
   @MaxLength(100)
   email: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    example: [ROLE.USER],
+    enum: ROLE,
+    isArray: true,
+    description: 'User roles',
+  })
   @IsNotEmpty()
   roles: ROLE[] = [ROLE.USER];
+
+  @ApiPropertyOptional({
+    description: 'Employee working hours in UTC format (HH:MM-HH:MM)',
+    example: { Monday: ['09:00-17:00'], Tuesday: ['09:00-17:00'] },
+    type: 'object',
+    additionalProperties: {
+      type: 'array',
+      items: {
+        type: 'string',
+        example: '09:00-17:00',
+      },
+    },
+  })
+  @IsOptional()
+  @IsObject()
+  workHours?: Record<string, string[]>;
 
   ghlUserId?: string;
 

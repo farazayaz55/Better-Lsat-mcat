@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayNotEmpty,
   IsAlphanumeric,
@@ -7,6 +7,7 @@ import {
   IsEmail,
   IsEnum,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsPhoneNumber,
   IsString,
@@ -37,7 +38,7 @@ export class CreateUserInput {
   @IsNotEmpty()
   @IsString()
   @Length(6, 100)
-  password: string;
+  password?: string;
 
   @ApiProperty()
   @IsArray()
@@ -54,6 +55,14 @@ export class CreateUserInput {
   @ApiProperty()
   @IsBoolean()
   isAccountDisabled: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Employee working hours in UTC format (HH:MM-HH:MM)',
+    example: { Monday: ['09:00-17:00'], Tuesday: ['09:00-17:00'] },
+  })
+  @IsOptional()
+  @IsObject()
+  workHours?: Record<string, string[]>;
 
   ghlUserId?: string;
 }

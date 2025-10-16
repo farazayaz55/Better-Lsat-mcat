@@ -17,7 +17,12 @@ export class BaseUserOutput {
   username: string;
 
   @Expose()
-  @ApiProperty({ example: [ROLE.USER] })
+  @ApiProperty({
+    example: [ROLE.USER],
+    enum: ROLE,
+    description: 'User roles',
+    isArray: true,
+  })
   roles: ROLE[];
 
   @Expose()

@@ -62,7 +62,7 @@ describe('AuthController', () => {
   describe('login', () => {
     it('should login user', async () => {
       const loginInputDto = new LoginInput();
-      loginInputDto.username = 'john@example.com';
+      loginInputDto.email = 'john@example.com';
       loginInputDto.password = '123123';
 
       jest.spyOn(mockedAuthService, 'login').mockImplementation(() => null);

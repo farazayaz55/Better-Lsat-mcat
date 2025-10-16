@@ -1,3 +1,6 @@
+/* eslint-disable max-depth */
+/* eslint-disable max-statements */
+/* eslint-disable security/detect-object-injection */
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
@@ -62,7 +65,7 @@ export class OrderService {
       name: createOrderDto.user.firstName + createOrderDto.user.lastName,
       phone: createOrderDto.user.phone,
     } as CreateCustomerInput);
-    order.customerId = customer.id;
+    order.customer = customer;
 
     // Validate slot availability and create reservations
     await this.validateAndReserveSlots(ctx, order, createOrderDto.items);
@@ -86,6 +89,7 @@ export class OrderService {
             ctx,
             `No employee available for service ID: ${item.id}`,
           );
+          throw new Error(`No employee available for service ID: ${item.id}`);
         }
       }
     }
@@ -216,7 +220,7 @@ export class OrderService {
   async findAll(
     limit: number,
     offset: number,
-    orderStatus?: PaymentStatus,
+    orderStatus?: string,
   ): Promise<{ orders: OrderOutput[]; count: number }> {
     const queryBuilder = this.repository
       .createQueryBuilder('o')
@@ -235,6 +239,8 @@ export class OrderService {
 
     // Get results and count
     const [orders, count] = await queryBuilder.getManyAndCount();
+
+    console.log(orders[0]);
 
     // Transform to DTO
     const ordersOutput = plainToInstance(OrderOutput, orders, {
@@ -835,6 +841,7 @@ export class OrderService {
   private async validateAndReserveSlots(
     ctx: RequestContext,
     order: Order,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items: any[],
   ): Promise<void> {
     this.logger.log(ctx, 'Starting slot validation and reservation process');

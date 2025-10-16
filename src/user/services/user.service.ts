@@ -49,7 +49,9 @@ export class UserService {
       `DEBUG - User object: ${JSON.stringify(user, null, 2)}`,
     );
 
-    user.password = await hash(input.password, 10);
+    if (input.password) {
+      user.password = await hash(input.password, 10);
+    }
 
     this.logger.log(
       ctx,
@@ -217,9 +219,9 @@ export class UserService {
     const user = await this.repository.getById(userId);
 
     // Hash the password if it exists in the input payload.
-    if (input.password) {
-      input.password = await hash(input.password, 10);
-    }
+    // if (input.password) {
+    //   input.password = await hash(input.password, 10);
+    // }
 
     // merges the input (2nd line) to the found user (1st line)
     const updatedUser: User = {

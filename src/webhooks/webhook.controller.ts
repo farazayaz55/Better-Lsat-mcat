@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   Body,
   Controller,
@@ -34,10 +35,24 @@ export class WebhookController {
 
   @Post('stripe')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Handle Stripe webhooks' })
+  @ApiOperation({
+    summary: 'Handle Stripe webhooks',
+    description: 'Processes Stripe payment webhook events',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Webhook processed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Webhook processed' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid webhook signature or payload',
   })
   // eslint-disable-next-line max-statements
   public async handleStripeWebhook(
@@ -115,6 +130,20 @@ export class WebhookController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Catch-all POST route for debugging' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Webhook debugging information',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string' },
+        message: { type: 'string' },
+        received: { type: 'boolean' },
+        body: { type: 'object' },
+        headers: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  })
   public async catchAllPost(
     @ReqContext() ctx: RequestContext,
     @Body() body: any,
