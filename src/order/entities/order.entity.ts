@@ -5,7 +5,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { User } from '../../user/entities/user.entity';
 import { Items } from '../interfaces/item.interface';
@@ -28,6 +28,12 @@ export class Order {
   @Column({ type: 'json' })
   items: Items;
 
+  @ApiPropertyOptional({
+    description:
+      'Stripe payment metadata including session info, payment status, and webhook data',
+    type: StripeMetadata,
+    nullable: true,
+  })
   @Column({ type: 'json', nullable: true })
   stripe_meta: StripeMetadata;
 

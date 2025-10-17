@@ -74,7 +74,7 @@ export class OrderController {
   @HttpCode(HttpStatus.OK)
   @ApiResponse({
     status: HttpStatus.CREATED,
-    type: swaggerBaseApiResponse(OrderOutput),
+    type: swaggerBaseApiResponse(StripeCheckoutSession),
   })
   // @UseInterceptors(ClassSerializerInterceptor)
   // @ApiBearerAuth()
@@ -244,6 +244,7 @@ export class OrderController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Returns Stripe checkout session URL and ID',
+    type: swaggerBaseApiResponse(StripeCheckoutSession),
   })
   async createStripeCheckout(
     @ReqContext() ctx: RequestContext,
@@ -260,6 +261,7 @@ export class OrderController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Returns Stripe payment intent client secret and ID',
+    type: swaggerBaseApiResponse(StripePaymentIntent),
   })
   async createStripePaymentIntent(
     @ReqContext() ctx: RequestContext,
