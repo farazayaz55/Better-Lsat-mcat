@@ -20,15 +20,26 @@ async function bootstrap() {
 
   app.useGlobalPipes(new ValidationPipe(VALIDATION_PIPE_OPTIONS));
   app.use(RequestIdMiddleware);
-  
-  // Configure CORS to allow requests from your frontend domain
+
+  // Configure CORS dynamically based on environment
+  const configService = app.get(ConfigService);
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  const allowedOrigins = [
+    frontendUrl,
+    'https://booking.betterlsat.com',
+    'https://www.booking.betterlsat.com',
+    'http://localhost:3000', // For local development
+    'http://localhost:5173', // For Vite dev server
+  ].filter(Boolean); // Remove undefined values
+
+  console.log('CORS Configuration:', {
+    frontendUrl,
+    allowedOrigins,
+    environment: configService.get<string>('APP_ENV'),
+  });
+
   app.enableCors({
-    origin: [
-      'https://booking.betterlsat.com',
-      'https://www.booking.betterlsat.com',
-      'http://localhost:3000', // For local development
-      'http://localhost:5173', // For Vite dev server
-    ],
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -51,7 +62,6 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, options);
   SwaggerModule.setup('swagger', app, document);
 
-  const configService = app.get(ConfigService);
   const port = configService.get<number>('port');
   await app.listen(port || 3000);
 }
