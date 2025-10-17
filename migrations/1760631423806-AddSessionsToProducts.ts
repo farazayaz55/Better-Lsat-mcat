@@ -5,21 +5,10 @@ export class AddSessionsToProducts1760631423806 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
-            `DROP INDEX "public"."idx_order_reservation_expires"`,
-        );
-        await queryRunner.query(
-            `CREATE TABLE "products" ("id" SERIAL NOT NULL, "name" character varying(200) NOT NULL, "price" integer NOT NULL, "sessions" integer NOT NULL, "save" integer NOT NULL, "Duration" character varying(100) NOT NULL, "Description" text NOT NULL, "badge" json, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "PK_0806c755e0aca124e67c0cf6d7d" PRIMARY KEY ("id"))`,
+            `ALTER TABLE "products" ADD "sessions" integer NOT NULL`,
         );
 
-        // Create indexes
-        await queryRunner.query(
-            `CREATE INDEX "IDX_PRODUCTS_NAME" ON "products" ("name")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_PRODUCTS_PRICE" ON "products" ("price")`,
-        );
-
-        // Insert seed data
+        // Insert seed data after sessions field is added
         await queryRunner.query(`
             INSERT INTO products (id, name, price, save, sessions, "Duration", "Description", badge) VALUES 
             (8, '15-Minute FREE Strategy Call', 0, 0, 1, 'Unlimited', 'No sales pitch. No wasted time. Just a focused strategy session to give you clarity and direction for your LSAT prep.', '{"text": "FREE", "color": "bg-green-600"}'),
@@ -31,9 +20,8 @@ export class AddSessionsToProducts1760631423806 implements MigrationInterface {
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE "products"`);
         await queryRunner.query(
-            `CREATE INDEX "idx_order_reservation_expires" ON "order" ("slot_reservation_expires_at") WHERE ((slot_reservation_status)::text = 'RESERVED'::text)`,
+            `ALTER TABLE "products" DROP COLUMN "sessions"`,
         );
     }
 }

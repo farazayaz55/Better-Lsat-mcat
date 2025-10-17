@@ -1,49 +1,27 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class Migrations1759309587724 implements MigrationInterface {
-    name = 'Migrations1759309587724';
+export class CreateOrder1759309587724 implements MigrationInterface {
+    name = 'CreateOrder1759309587724';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        // Make username nullable
+        await queryRunner.query(`CREATE TABLE "order" (
+            "id" SERIAL NOT NULL,
+            "customerId" integer NOT NULL,
+            "items" json NOT NULL,
+            "stripe_meta" json,
+            "slot_reservation_expires_at" TIMESTAMP,
+            "slot_reservation_status" character varying(20) DEFAULT 'RESERVED',
+            CONSTRAINT "PK_1031171c13130102495201e3e20" PRIMARY KEY ("id")
+        )`);
         await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "username" DROP NOT NULL`,
-        );
-
-        // Make password nullable
-        await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "password" DROP NOT NULL`,
-        );
-
-        // Ensure roles defaults to empty array if needed
-        await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "roles" SET DEFAULT '{}'`,
-        );
-
-        // Ensure isAccountDisabled has a default value
-        await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "isAccountDisabled" SET DEFAULT false`,
+            `ALTER TABLE "order" ADD CONSTRAINT "FK_124456e637ccffd3bce8ee5f65" FOREIGN KEY ("customerId") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
         );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        // Revert username back to NOT NULL
         await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "username" SET NOT NULL`,
+            `ALTER TABLE "order" DROP CONSTRAINT "FK_124456e637ccffd3bce8ee5f65"`,
         );
-
-        // Revert password back to NOT NULL
-        await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "password" SET NOT NULL`,
-        );
-
-        // Remove default from roles
-        await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "roles" DROP DEFAULT`,
-        );
-
-        // Remove default from isAccountDisabled
-        await queryRunner.query(
-            `ALTER TABLE "users" ALTER COLUMN "isAccountDisabled" DROP DEFAULT`,
-        );
+        await queryRunner.query(`DROP TABLE "order"`);
     }
 }
