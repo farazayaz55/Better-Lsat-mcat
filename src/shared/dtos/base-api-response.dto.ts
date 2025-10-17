@@ -29,7 +29,7 @@ export class MetaResponse {
 export class BaseApiResponse<T> {
   public data: T; // Swagger Decorator is added in the extended class below, since that will override this one.
 
-  @ApiProperty({ type: Object })
+  @ApiProperty({ type: MetaResponse })
   public meta: MetaResponse;
 }
 

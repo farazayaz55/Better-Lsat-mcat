@@ -10,6 +10,7 @@ import { AppLogger } from '../../shared/logger/logger.service';
 import { GoogleCalendarService } from '../../shared/services/google-calendar-api-key.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { CreateCustomerInput } from '../dtos/customer-create-input.dto';
+import { UserInput } from '../../order/interfaces/user.interface';
 import { CreateUserInput } from '../dtos/user-create-input.dto';
 import { UserOutput } from '../dtos/user-output.dto';
 import { UpdateUserInput } from '../dtos/user-update-input.dto';
@@ -67,7 +68,7 @@ export class UserService {
 
   public async getOrCreateCustomer(
     ctx: RequestContext,
-    input: CreateCustomerInput,
+    input: UserInput,
   ): Promise<User> {
     this.logger.log(ctx, `${this.getOrCreateCustomer.name} was called`);
 
@@ -76,9 +77,16 @@ export class UserService {
       where: { email: input.email },
     });
     if (!customer) {
-      ((input.roles = [ROLE.CUSTOMER]),
-        (input.isAccountDisabled = false),
-        (customer = this.repository.create(input)));
+      // Convert UserInput to CreateCustomerInput
+      const createCustomerInput: CreateCustomerInput = {
+        name: `${input.firstName} ${input.lastName}`,
+        email: input.email,
+        phone: input.phone,
+        roles: [ROLE.CUSTOMER],
+        isAccountDisabled: false,
+      };
+
+      customer = this.repository.create(createCustomerInput);
       await this.repository.save(customer);
     }
     return customer;
@@ -143,12 +151,17 @@ export class UserService {
   ): Promise<{ users: UserOutput[]; count: number }> {
     this.logger.log(ctx, `${this.getUsers.name} was called`);
 
-    this.logger.log(ctx, `calling ${UserRepository.name}.findAndCount`);
-    const [users, count] = await this.repository.findAndCount({
-      where: {},
-      take: limit,
-      skip: offset,
-    });
+    this.logger.log(
+      ctx,
+      `calling ${UserRepository.name}.createQueryBuilder with ordersCount`,
+    );
+    const queryBuilder = this.repository
+      .createQueryBuilder('user')
+      .loadRelationCountAndMap('user.ordersCount', 'user.orders')
+      .take(limit)
+      .skip(offset);
+
+    const [users, count] = await queryBuilder.getManyAndCount();
 
     const usersOutput = plainToInstance(UserOutput, users, {
       excludeExtraneousValues: true,

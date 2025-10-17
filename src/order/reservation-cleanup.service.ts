@@ -4,6 +4,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { OrderRepository } from './repository/order.repository';
+import { SlotReservationStatus } from './constants/slot-reservation-status.constant';
 
 @Injectable()
 export class ReservationCleanupService {
@@ -78,7 +79,7 @@ export class ReservationCleanupService {
       const expiredOrders = await this.orderRepository
         .createQueryBuilder('order')
         .where('order.slot_reservation_status = :status', {
-          status: 'RESERVED',
+          status: SlotReservationStatus.RESERVED,
         })
         .andWhere('order.slot_reservation_expires_at < :now', {
           now: new Date(),
@@ -95,7 +96,7 @@ export class ReservationCleanupService {
       await this.orderRepository
         .createQueryBuilder()
         .update()
-        .set({ slot_reservation_status: 'EXPIRED' })
+        .set({ slot_reservation_status: SlotReservationStatus.EXPIRED })
         .where('id IN (:...ids)', { ids: orderIds })
         .execute();
 

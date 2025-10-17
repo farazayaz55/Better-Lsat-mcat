@@ -59,6 +59,14 @@ export class ItemInput {
   @IsNumber()
   quantity: number;
 
+  @ApiProperty({
+    description: 'Number of sessions included',
+    example: 1,
+    type: Number,
+  })
+  @IsNumber()
+  sessions: number;
+
   @ApiPropertyOptional({
     description: 'ID of assigned employee',
     example: 5,

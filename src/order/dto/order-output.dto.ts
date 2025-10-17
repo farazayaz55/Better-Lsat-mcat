@@ -1,6 +1,7 @@
 import { Expose, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserOutput } from '../../user/dtos/user-output.dto';
+import { SlotReservationStatus } from '../constants/slot-reservation-status.constant';
 
 export class Badge {
   @Expose()
@@ -56,6 +57,10 @@ export class ItemOutput {
   save?: number;
 
   @Expose()
+  @ApiProperty({ description: 'Number of sessions included', example: 1 })
+  sessions: number;
+
+  @Expose()
   @ApiProperty({
     description: 'Item description',
     example: 'Comprehensive prep session',
@@ -99,4 +104,25 @@ export class OrderOutput {
     type: [ItemOutput],
   })
   items: ItemOutput[];
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Slot reservation expiration timestamp',
+    example: '2024-01-15T14:30:00.000Z',
+    type: 'string',
+    format: 'date-time',
+    nullable: true,
+  })
+  slot_reservation_expires_at?: Date;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description:
+      'Slot reservation status indicating the current state of the reservation',
+    enum: SlotReservationStatus,
+    example: SlotReservationStatus.RESERVED,
+    type: 'string',
+    nullable: true,
+  })
+  slot_reservation_status?: SlotReservationStatus;
 }

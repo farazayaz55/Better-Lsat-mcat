@@ -14,6 +14,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiBearerAuth,
   ApiExtraModels,
@@ -22,6 +23,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { plainToInstance } from 'class-transformer';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   BaseApiErrorResponse,
@@ -34,19 +36,16 @@ import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
-import { OrderService } from './order.service';
-import { ReservationCleanupService } from './reservation-cleanup.service';
-import { ConfigService } from '@nestjs/config';
-import { PaginationParamsDto as PaginationParametersDto } from '../shared/dtos/pagination-params.dto';
+import { SlotsQueryDto } from './dto/slots.query.dto';
+import { GetOrdersQueryParams } from './interfaces/get-orders-query.interface';
+import { Slot } from './interfaces/slot.interface';
 import {
   PaymentStatus,
   StripeCheckoutSession,
   StripePaymentIntent,
 } from './interfaces/stripe-metadata.interface';
-import { Slot } from './interfaces/slot.interface';
-import { plainToInstance } from 'class-transformer';
-import { SlotsQueryDto } from './dto/slots.query.dto';
-import { GetOrdersQueryParams } from './interfaces/get-orders-query.interface';
+import { OrderService } from './order.service';
+import { ReservationCleanupService } from './reservation-cleanup.service';
 
 @ApiTags('order')
 @Controller('order')
@@ -136,7 +135,7 @@ export class OrderController {
       query.offset,
       query.orderStatus,
     );
-    return { data: orders, meta: { count } };
+    return { data: orders, meta: { total: count } };
   }
 
   /**get for specific month */

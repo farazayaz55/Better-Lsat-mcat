@@ -19,6 +19,7 @@ import { OrderService } from '../order/order.service';
 import { GoogleCalendarService } from '../shared/services/google-calendar-api-key.service';
 import { UserService } from '../user/services/user.service';
 import { PaymentStatus } from '../order/interfaces/stripe-metadata.interface';
+import { SlotReservationStatus } from '../order/constants/slot-reservation-status.constant';
 
 @ApiTags('webhooks')
 @Controller('webhooks')
@@ -276,7 +277,7 @@ export class WebhookController {
           await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
           // Update slot reservation status to CONFIRMED
           await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
+            slot_reservation_status: SlotReservationStatus.CONFIRMED,
           });
 
           this.logger.log(
@@ -341,11 +342,11 @@ export class WebhookController {
           await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
           // Update slot reservation status to CONFIRMED
           await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
+            slot_reservation_status: SlotReservationStatus.CONFIRMED,
           });
           // Update slot reservation status to CONFIRMED
           await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
+            slot_reservation_status: SlotReservationStatus.CONFIRMED,
           });
 
           this.logger.log(
@@ -398,11 +399,11 @@ export class WebhookController {
           await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
           // Update slot reservation status to CONFIRMED
           await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
+            slot_reservation_status: SlotReservationStatus.CONFIRMED,
           });
           // Update slot reservation status to CONFIRMED
           await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: 'CONFIRMED',
+            slot_reservation_status: SlotReservationStatus.CONFIRMED,
           });
 
           this.logger.log(ctx, `Order ${orderId} payment failed`);
@@ -536,7 +537,7 @@ export class WebhookController {
       }
 
       // Check if reservation status is still RESERVED
-      if (order.slot_reservation_status !== 'RESERVED') {
+      if (order.slot_reservation_status !== SlotReservationStatus.RESERVED) {
         this.logger.error(
           ctx,
           `Order ${order.id} slot reservation status is ${order.slot_reservation_status}, expected RESERVED`,

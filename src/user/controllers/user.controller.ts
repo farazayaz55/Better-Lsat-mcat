@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Post,
   Query,
   UseGuards,
   UseInterceptors,
@@ -39,6 +40,9 @@ import { UserOutput } from '../dtos/user-output.dto';
 import { UpdateUserInput } from '../dtos/user-update-input.dto';
 import { UserService } from '../services/user.service';
 import { GhlService } from '../../shared/services/Ghl.service';
+import { UserInput } from '../../order/interfaces/user.interface';
+import { plainToInstance } from 'class-transformer';
+import { BaseUserOutput } from '../../shared/dtos/base-user-output.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -76,6 +80,38 @@ export class UserController {
     return { data: user, meta: {} };
   }
 
+  @Post('get-or-create-customer')
+  @ApiOperation({
+    summary: 'Get or create customer API',
+    description:
+      'Public endpoint to get existing customer by email or create a new one',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: swaggerBaseApiResponse(BaseUserOutput),
+    description: 'Customer retrieved or created successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    type: BaseApiErrorResponse,
+  })
+  @UseInterceptors(ClassSerializerInterceptor)
+  async getOrCreateCustomer(
+    @ReqContext() ctx: RequestContext,
+    @Body() input: UserInput,
+  ): Promise<BaseApiResponse<BaseUserOutput>> {
+    this.logger.log(ctx, `${this.getOrCreateCustomer.name} was called`);
+
+    const user = await this.userService.getOrCreateCustomer(ctx, input);
+
+    // Transform User entity to UserOutput
+    const userOutput = plainToInstance(BaseUserOutput, user, {
+      excludeExtraneousValues: true,
+    });
+
+    return { data: userOutput, meta: {} };
+  }
+
   @UseInterceptors(ClassSerializerInterceptor)
   @Get()
   @ApiOperation({
@@ -104,7 +140,7 @@ export class UserController {
       query.offset,
     );
 
-    return { data: users, meta: { count } };
+    return { data: users, meta: { total: count } };
   }
 
   // TODO: ADD RoleGuard

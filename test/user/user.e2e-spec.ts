@@ -33,16 +33,19 @@ describe('UserController (e2e)', () => {
   });
 
   describe('Get user me', () => {
-    it('gets user me', async () => request(app.getHttpServer())
+    it('gets user me', async () =>
+      request(app.getHttpServer())
         .get('/users/me')
         .set('Authorization', 'Bearer ' + authTokenForAdmin.accessToken)
         .expect(HttpStatus.OK));
 
-    it('Unauthorized error when BearerToken is not provided', async () => request(app.getHttpServer())
+    it('Unauthorized error when BearerToken is not provided', async () =>
+      request(app.getHttpServer())
         .get('/users/me')
         .expect(HttpStatus.UNAUTHORIZED));
 
-    it('Unauthorized error when BearerToken is wrong', async () => request(app.getHttpServer())
+    it('Unauthorized error when BearerToken is wrong', async () =>
+      request(app.getHttpServer())
         .get('/users/me')
         .set('Authorization', 'Bearer ' + 'abcd')
         .expect(HttpStatus.UNAUTHORIZED));
@@ -56,7 +59,7 @@ describe('UserController (e2e)', () => {
         .get('/users')
         .set('Authorization', 'Bearer ' + authTokenForAdmin.accessToken)
         .expect(HttpStatus.OK)
-        .expect({ data: expectedOutput, meta: { count: 1 } });
+        .expect({ data: expectedOutput, meta: { total: 1 } });
     });
   });
 
@@ -70,7 +73,8 @@ describe('UserController (e2e)', () => {
         .expect({ data: expectedOutput, meta: {} });
     });
 
-    it('throws NOT_FOUND when user doesnt exist', () => request(app.getHttpServer())
+    it('throws NOT_FOUND when user doesnt exist', () =>
+      request(app.getHttpServer())
         .get('/users/99')
         .expect(HttpStatus.NOT_FOUND));
   });
@@ -84,7 +88,7 @@ describe('UserController (e2e)', () => {
     it('successfully updates a user', async () => {
       const expectedOutput: UserOutput = {
         ...adminUser,
-         name: 'New e2etestername' ,
+        name: 'New e2etestername',
       };
 
       return request(app.getHttpServer())
@@ -98,7 +102,8 @@ describe('UserController (e2e)', () => {
         });
     });
 
-    it('throws NOT_FOUND when user doesnt exist', () => request(app.getHttpServer())
+    it('throws NOT_FOUND when user doesnt exist', () =>
+      request(app.getHttpServer())
         .patch('/users/99')
         .expect(HttpStatus.NOT_FOUND));
 

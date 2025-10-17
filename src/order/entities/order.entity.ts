@@ -5,10 +5,12 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 
 import { User } from '../../user/entities/user.entity';
 import { Items } from '../interfaces/item.interface';
 import { StripeMetadata } from '../interfaces/stripe-metadata.interface';
+import { SlotReservationStatus } from '../constants/slot-reservation-status.constant';
 
 @Entity('order')
 export class Order {
@@ -29,14 +31,29 @@ export class Order {
   @Column({ type: 'json', nullable: true })
   stripe_meta: StripeMetadata;
 
+  @ApiProperty({
+    description: 'Slot reservation expiration timestamp',
+    example: '2024-01-15T14:30:00.000Z',
+    type: 'string',
+    format: 'date-time',
+    nullable: true,
+  })
   @Column({ type: 'timestamp', nullable: true })
   slot_reservation_expires_at: Date;
 
+  @ApiProperty({
+    description:
+      'Slot reservation status indicating the current state of the reservation',
+    enum: SlotReservationStatus,
+    example: SlotReservationStatus.RESERVED,
+    type: 'string',
+    nullable: true,
+  })
   @Column({
     type: 'varchar',
     length: 20,
-    default: 'RESERVED',
+    default: SlotReservationStatus.RESERVED,
     nullable: true,
   })
-  slot_reservation_status: 'RESERVED' | 'CONFIRMED' | 'EXPIRED';
+  slot_reservation_status: SlotReservationStatus;
 }

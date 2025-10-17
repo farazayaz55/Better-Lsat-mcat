@@ -6,6 +6,7 @@ import { WooCommerceService } from '../shared/services/WooCommerce.service';
 import { GoogleCalendarModule } from '../shared/google-calendar.module';
 import { SharedModule } from '../shared/shared.module';
 import { UserModule } from '../user/user.module';
+import { ProductModule } from '../product/product.module';
 import { Order } from './entities/order.entity';
 import { OrderController } from './order.controller';
 import { OrderService } from './order.service';
@@ -17,6 +18,7 @@ import { ReservationCleanupService } from './reservation-cleanup.service';
     SharedModule,
     TypeOrmModule.forFeature([Order]),
     UserModule,
+    ProductModule,
     GoogleCalendarModule,
   ],
   controllers: [OrderController],

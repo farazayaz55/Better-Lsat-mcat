@@ -23,4 +23,12 @@ export class UserOutput extends BaseUserOutput {
     },
   })
   workHours: Record<string, string[]>;
+
+  @Expose()
+  @ApiProperty({
+    description: 'Total count of orders for this user',
+    example: 5,
+    type: 'number',
+  })
+  ordersCount: number;
 }

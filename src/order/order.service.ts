@@ -1,6 +1,5 @@
 /* eslint-disable max-depth */
 /* eslint-disable max-statements */
-/* eslint-disable security/detect-object-injection */
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
@@ -13,6 +12,7 @@ import { WooCommerceService } from '../shared/services/WooCommerce.service';
 import { CreateCustomerInput } from '../user/dtos/customer-create-input.dto';
 import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/services/user.service';
+import { ProductService } from '../product/services/product.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
 import { Order } from './entities/order.entity';
@@ -28,6 +28,7 @@ import {
   StripePaymentIntent,
 } from './interfaces/stripe-metadata.interface';
 import { OrderRepository } from './repository/order.repository';
+import { SlotReservationStatus } from './constants/slot-reservation-status.constant';
 
 @Injectable()
 export class OrderService {
@@ -35,6 +36,7 @@ export class OrderService {
     private readonly repository: OrderRepository,
     private readonly logger: AppLogger,
     private readonly userService: UserService,
+    private readonly productService: ProductService,
     private readonly wS: WooCommerceService,
     private readonly ghlService: GhlService,
     private readonly stripeService: StripeService,
@@ -61,11 +63,25 @@ export class OrderService {
     //create customer if does not exist
     // if exists then fetch it
     const customer = await this.userService.getOrCreateCustomer(ctx, {
+      firstName: createOrderDto.user.firstName,
+      lastName: createOrderDto.user.lastName,
       email: createOrderDto.user.email,
-      name: createOrderDto.user.firstName + createOrderDto.user.lastName,
       phone: createOrderDto.user.phone,
-    } as CreateCustomerInput);
+    });
     order.customer = customer;
+
+    // Validate that all product IDs in items exist
+    const productIds = createOrderDto.items.map((item) => item.id);
+    const existingProducts = await this.productService.findByIds(productIds);
+
+    if (existingProducts.length !== productIds.length) {
+      const existingIds = existingProducts.map((p) => p.id);
+      const missingIds = productIds.filter((id) => !existingIds.includes(id));
+      this.logger.error(ctx, `Products not found: ${missingIds.join(', ')}`);
+      throw new Error(`Products with IDs ${missingIds.join(', ')} not found`);
+    }
+
+    this.logger.log(ctx, `Validated ${existingProducts.length} products exist`);
 
     // Validate slot availability and create reservations
     await this.validateAndReserveSlots(ctx, order, createOrderDto.items);
@@ -531,6 +547,7 @@ export class OrderService {
       'Friday',
       'Saturday',
     ];
+    // eslint-disable-next-line security/detect-object-injection
     return days[dayNumber];
   }
 
@@ -543,6 +560,7 @@ export class OrderService {
     const slotTimeInMinutes = slotHour * 60 + slotMinute;
 
     // Get employee's working hours for this day
+    // eslint-disable-next-line security/detect-object-injection
     const dayWorkHours = employee.workHours?.[dayOfWeek] || [];
 
     if (dayWorkHours.length === 0) {
@@ -859,7 +877,7 @@ export class OrderService {
 
     // Set reservation details on the order
     order.slot_reservation_expires_at = expiresAt;
-    order.slot_reservation_status = 'RESERVED';
+    order.slot_reservation_status = SlotReservationStatus.RESERVED;
 
     this.logger.log(
       ctx,
@@ -913,7 +931,7 @@ export class OrderService {
       const confirmedBookings = await this.repository
         .createQueryBuilder('o')
         .where('o.slot_reservation_status = :status', {
-          status: 'CONFIRMED',
+          status: SlotReservationStatus.CONFIRMED,
         })
         .andWhere('o.items::text LIKE :dateTime', {
           dateTime: `%${dateTime}%`,
@@ -929,7 +947,7 @@ export class OrderService {
       const activeReservations = await this.repository
         .createQueryBuilder('o')
         .where('o.slot_reservation_status = :status', {
-          status: 'RESERVED',
+          status: SlotReservationStatus.RESERVED,
         })
         .andWhere('o.slot_reservation_expires_at > :now', {
           now: new Date(),
@@ -966,6 +984,7 @@ export class OrderService {
    * @param serviceId Service ID
    * @returns Map of slot times to reservation data
    */
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   private async getDatabaseReservations(
     ctx: RequestContext,
     from: Date,
@@ -982,7 +1001,10 @@ export class OrderService {
       const reservations = await this.repository
         .createQueryBuilder('o')
         .where('o.slot_reservation_status IN (:...statuses)', {
-          statuses: ['CONFIRMED', 'RESERVED'],
+          statuses: [
+            SlotReservationStatus.CONFIRMED,
+            SlotReservationStatus.RESERVED,
+          ],
         })
         .andWhere('o.slot_reservation_expires_at > :now', {
           now: new Date(),
