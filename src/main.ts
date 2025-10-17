@@ -20,7 +20,25 @@ async function bootstrap() {
 
   app.useGlobalPipes(new ValidationPipe(VALIDATION_PIPE_OPTIONS));
   app.use(RequestIdMiddleware);
-  app.enableCors();
+  
+  // Configure CORS to allow requests from your frontend domain
+  app.enableCors({
+    origin: [
+      'https://booking.betterlsat.com',
+      'https://www.booking.betterlsat.com',
+      'http://localhost:3000', // For local development
+      'http://localhost:5173', // For Vite dev server
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+    ],
+    credentials: true,
+  });
 
   /** Swagger configuration*/
   const options = new DocumentBuilder()
