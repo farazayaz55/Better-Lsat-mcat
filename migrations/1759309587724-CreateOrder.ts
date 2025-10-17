@@ -8,9 +8,6 @@ export class CreateOrder1759309587724 implements MigrationInterface {
             "id" SERIAL NOT NULL,
             "customerId" integer NOT NULL,
             "items" json NOT NULL,
-            "stripe_meta" json,
-            "slot_reservation_expires_at" TIMESTAMP,
-            "slot_reservation_status" character varying(20) DEFAULT 'RESERVED',
             CONSTRAINT "PK_1031171c13130102495201e3e20" PRIMARY KEY ("id")
         )`);
         await queryRunner.query(
