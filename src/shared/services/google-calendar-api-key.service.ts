@@ -561,4 +561,185 @@ export class GoogleCalendarService {
 
     return 60 * 60 * 1000; // Default to 1 hour
   }
+
+  // Task-specific methods
+  async createTaskEvent(
+    ctx: RequestContext,
+    task: any,
+    tutorEmail: string,
+  ): Promise<string> {
+    try {
+      this.logger.log(
+        ctx,
+        `Creating Google Calendar event for task: ${task.title} (ID: ${task.id})`,
+      );
+
+      const startTime = new Date(task.startDateTime);
+      const endTime = new Date(task.endDateTime);
+
+      // Business owner email (you) - this will be the organizer
+      const businessOwnerEmail = this.configService.get<string>(
+        'googleCalendar.businessOwnerEmail',
+      );
+
+      // Use UTC timezone to avoid timezone conversion issues
+      const event: calendar_v3.Schema$Event = {
+        summary: `${task.title} - ${task.label}`,
+        description: `${task.description || `Task: ${task.title}`}\n\nTask ID: ${task.id}\nPriority: ${task.priority}\nStatus: ${task.status}\nLabel: ${task.label}`,
+        start: {
+          dateTime: startTime.toISOString(),
+          timeZone: 'UTC',
+        },
+        end: {
+          dateTime: endTime.toISOString(),
+          timeZone: 'UTC',
+        },
+        organizer: businessOwnerEmail
+          ? {
+              email: businessOwnerEmail,
+              displayName: 'Better LSAT MCAT',
+            }
+          : undefined,
+        attendees: [
+          {
+            email: tutorEmail,
+            displayName: 'Tutor',
+            responseStatus: 'needsAction',
+          },
+        ],
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 30 }, // 30 minutes before
+          ],
+        },
+      };
+
+      const calendar = calendar_v3.Calendar({
+        version: 'v3',
+        auth: this.oauth2Client,
+      });
+
+      const calendarId = this.configService.get<string>('googleCalendar.calendarId');
+      const response = await calendar.events.insert({
+        calendarId,
+        requestBody: event,
+      });
+
+      const eventId = response.data.id;
+      this.logger.log(ctx, `Created Google Calendar event with ID: ${eventId}`);
+      return eventId;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to create Google Calendar event for task ${task.id}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+      throw error;
+    }
+  }
+
+  async updateTaskEvent(
+    ctx: RequestContext,
+    eventId: string,
+    task: any,
+    tutorEmail: string,
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        ctx,
+        `Updating Google Calendar event: ${eventId} for task: ${task.title}`,
+      );
+
+      const startTime = new Date(task.startDateTime);
+      const endTime = new Date(task.endDateTime);
+
+      // Business owner email (you) - this will be the organizer
+      const businessOwnerEmail = this.configService.get<string>(
+        'googleCalendar.businessOwnerEmail',
+      );
+
+      const event: calendar_v3.Schema$Event = {
+        summary: `${task.title} - ${task.label}`,
+        description: `${task.description || `Task: ${task.title}`}\n\nTask ID: ${task.id}\nPriority: ${task.priority}\nStatus: ${task.status}\nLabel: ${task.label}`,
+        start: {
+          dateTime: startTime.toISOString(),
+          timeZone: 'UTC',
+        },
+        end: {
+          dateTime: endTime.toISOString(),
+          timeZone: 'UTC',
+        },
+        organizer: businessOwnerEmail
+          ? {
+              email: businessOwnerEmail,
+              displayName: 'Better LSAT MCAT',
+            }
+          : undefined,
+        attendees: [
+          {
+            email: tutorEmail,
+            displayName: 'Tutor',
+            responseStatus: 'needsAction',
+          },
+        ],
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 30 },
+          ],
+        },
+      };
+
+      const calendar = calendar_v3.Calendar({
+        version: 'v3',
+        auth: this.oauth2Client,
+      });
+
+      const calendarId = this.configService.get<string>('googleCalendar.calendarId');
+      await calendar.events.update({
+        calendarId,
+        eventId,
+        requestBody: event,
+      });
+
+      this.logger.log(ctx, `Updated Google Calendar event: ${eventId}`);
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to update Google Calendar event ${eventId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+      throw error;
+    }
+  }
+
+  async deleteTaskEvent(ctx: RequestContext, eventId: string): Promise<void> {
+    try {
+      this.logger.log(ctx, `Deleting Google Calendar event: ${eventId}`);
+
+      const calendar = calendar_v3.Calendar({
+        version: 'v3',
+        auth: this.oauth2Client,
+      });
+
+      const calendarId = this.configService.get<string>('googleCalendar.calendarId');
+      await calendar.events.delete({
+        calendarId,
+        eventId,
+      });
+
+      this.logger.log(ctx, `Deleted Google Calendar event: ${eventId}`);
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to delete Google Calendar event ${eventId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+      throw error;
+    }
+  }
 }

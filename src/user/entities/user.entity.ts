@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 
 import { Order } from '../../order/entities/order.entity';
+import { Task } from '../../task/entities/task.entity';
 
 @Entity('users')
 export class User {
@@ -64,4 +65,7 @@ export class User {
 
   @OneToMany(() => Order, (order) => order.customer)
   orders: Order[];
+
+  @OneToMany(() => Task, (task) => task.tutor)
+  tasks: Task[];
 }
