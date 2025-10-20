@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
-import { UserService } from '../user/user.service';
+import { UserService } from '../user/services/user.service';
 import { GoogleCalendarService } from '../shared/services/google-calendar-api-key.service';
 import { Task } from './entities/task.entity';
 import { TaskInputDto } from './dto/task-input.dto';
@@ -36,7 +36,7 @@ export class TaskService {
     // Create task entity
     const task = new Task();
     task.title = dto.title;
-    task.description = dto.description;
+    task.description = dto.description || null;
     task.startDateTime = new Date(dto.startDateTime);
     task.endDateTime = new Date(dto.endDateTime);
     task.tutorId = dto.tutorId;

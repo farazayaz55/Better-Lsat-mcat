@@ -23,10 +23,10 @@ import {
 
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
-import { ReqContext } from '../shared/request-context/request-context.decorator';
+import { ReqContext } from '../shared/request-context/req-context.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RBACGuard } from '../shared/guards/rbac.guard';
-import { Roles } from '../shared/decorators/roles.decorator';
+import { Roles } from '../auth/decorators/role.decorator';
 import { swaggerBaseApiResponse, BaseApiResponse } from '../shared/dtos/base-api-response.dto';
 import { TaskService } from './task.service';
 import { TaskInputDto } from './dto/task-input.dto';

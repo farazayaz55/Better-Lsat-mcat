@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
 
 import { TaskLabel, TaskPriority, TaskStatus } from '../entities/task.entity';
-import { UserOutput } from '../../user/dto/user-output.dto';
+import { UserOutput } from '../../user/dtos/user-output.dto';
 
 export class TaskOutputDto {
   @Expose()

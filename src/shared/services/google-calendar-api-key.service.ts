@@ -615,7 +615,7 @@ export class GoogleCalendarService {
         },
       };
 
-      const calendar = calendar_v3.Calendar({
+      const calendar = new calendar_v3.Calendar({
         version: 'v3',
         auth: this.oauth2Client,
       });
@@ -692,7 +692,7 @@ export class GoogleCalendarService {
         },
       };
 
-      const calendar = calendar_v3.Calendar({
+      const calendar = new calendar_v3.Calendar({
         version: 'v3',
         auth: this.oauth2Client,
       });
@@ -720,7 +720,7 @@ export class GoogleCalendarService {
     try {
       this.logger.log(ctx, `Deleting Google Calendar event: ${eventId}`);
 
-      const calendar = calendar_v3.Calendar({
+      const calendar = new calendar_v3.Calendar({
         version: 'v3',
         auth: this.oauth2Client,
       });
