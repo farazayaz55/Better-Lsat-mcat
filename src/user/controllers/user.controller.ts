@@ -13,36 +13,35 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { plainToInstance } from 'class-transformer';
 import { ROLE } from '../../auth/constants/role.constant';
 import { Roles } from '../../auth/decorators/role.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { UserInput } from '../../order/interfaces/user.interface';
 import {
   BaseApiErrorResponse,
   BaseApiResponse,
   swaggerBaseApiResponse,
 } from '../../shared/dtos/base-api-response.dto';
+import { BaseUserOutput } from '../../shared/dtos/base-user-output.dto';
 import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { ReqContext } from '../../shared/request-context/req-context.decorator';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
-import { RBACGuard } from '../../shared/guards/rbac.guard';
+import { GhlService } from '../../shared/services/Ghl.service';
 import { UserOutput } from '../dtos/user-output.dto';
 import { UpdateUserInput } from '../dtos/user-update-input.dto';
 import { UserService } from '../services/user.service';
-import { GhlService } from '../../shared/services/Ghl.service';
-import { UserInput } from '../../order/interfaces/user.interface';
-import { plainToInstance } from 'class-transformer';
-import { BaseUserOutput } from '../../shared/dtos/base-user-output.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -143,9 +142,10 @@ export class UserController {
     return { data: users, meta: { total: count } };
   }
 
-  // TODO: ADD RoleGuard
-  // NOTE : This can be made a admin only endpoint. For normal users they can use GET /me
   @UseInterceptors(ClassSerializerInterceptor)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  @ApiBearerAuth()
   @Get(':id')
   @ApiOperation({
     summary: 'Get user by id API',
@@ -190,7 +190,7 @@ export class UserController {
     type: BaseApiErrorResponse,
   })
   @Roles(ROLE.ADMIN, ROLE.USER)
-  @UseGuards(JwtAuthGuard, RBACGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @UseInterceptors(ClassSerializerInterceptor)
   async updateUser(
@@ -219,8 +219,8 @@ export class UserController {
     status: HttpStatus.UNAUTHORIZED,
     type: BaseApiErrorResponse,
   })
-  @Roles(ROLE.ADMIN, ROLE.USER)
-  @UseGuards(JwtAuthGuard, RolesGuard, RBACGuard)
+  @Roles(ROLE.ADMIN)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteUser(
@@ -239,11 +239,11 @@ export class UserController {
 
       const user = await this.userService.getUserById(ctx, userId);
       if (user.roles.includes(ROLE.USER)) {
-        const ghlUserId = await this.userService.getGhlIdByUserId(ctx, userId);
-        this.logger.log(ctx, `Deleting contact from GHL ${ghlUserId}`);
-        if (ghlUserId) {
-          await this.ghlService.deleteUser(ghlUserId);
-        }
+        // const ghlUserId = await this.userService.getGhlIdByUserId(ctx, userId);
+        // this.logger.log(ctx, `Deleting contact from GHL ${ghlUserId}`);
+        // if (ghlUserId) {
+        //   await this.ghlService.deleteUser(ghlUserId);
+        // }
       }
 
       // Step 1: Delete user from database

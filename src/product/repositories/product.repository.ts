@@ -8,3 +8,4 @@ export class ProductRepository extends Repository<Product> {
     super(Product, dataSource.createEntityManager());
   }
 }
+

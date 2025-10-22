@@ -17,17 +17,13 @@ export class UserAclService extends BaseAclService<User> {
     // Admin can update any user (users and customers)
     this.canDo(ROLE.ADMIN, [Action.UPDATE]);
 
-    // Users can read any user
-    this.canDo(ROLE.USER, [Action.READ]);
+    // Users can read customers and themselves only
+    this.canDo(ROLE.USER, [Action.READ], this.isTargetCustomer);
+    this.canDo(ROLE.USER, [Action.READ], this.isUserItself);
     // Users can only update customers (not other users)
     this.canDo(ROLE.USER, [Action.UPDATE], this.isTargetCustomer);
     // Users can only update themselves
     this.canDo(ROLE.USER, [Action.UPDATE], this.isUserItself);
-
-    // Customers can read any user
-    this.canDo(ROLE.CUSTOMER, [Action.READ]);
-    // Customers can only update themselves
-    this.canDo(ROLE.CUSTOMER, [Action.UPDATE], this.isUserItself);
   }
 
   isUserItself(resource: User, actor: IActor): boolean {

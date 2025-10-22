@@ -9,7 +9,7 @@ import { UserModule } from '../user/user.module';
 import { ProductModule } from '../product/product.module';
 import { Order } from './entities/order.entity';
 import { OrderController } from './order.controller';
-import { OrderService } from './order.service';
+import { OrderService } from './services/order.service';
 import { OrderRepository } from './repository/order.repository';
 import { ReservationCleanupService } from './reservation-cleanup.service';
 

@@ -8,13 +8,15 @@ import { User } from './entities/user.entity';
 import { UserRepository } from './repositories/user.repository';
 import { UserService } from './services/user.service';
 import { UserAclService } from './services/user-acl.service';
-import { RBACGuard } from '../shared/guards/rbac.guard';
 import { GhlService } from '../shared/services/Ghl.service';
+import { OrderRepository } from '../order/repository/order.repository';
+import { Order } from '../order/entities/order.entity';
 
 @Module({
   imports: [
     SharedModule,
     TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([Order]),
     GoogleCalendarModule,
   ],
   providers: [
@@ -22,7 +24,7 @@ import { GhlService } from '../shared/services/Ghl.service';
     JwtAuthStrategy,
     UserAclService,
     UserRepository,
-    RBACGuard,
+    OrderRepository,
     GhlService,
   ],
   controllers: [UserController],

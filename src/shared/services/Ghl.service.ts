@@ -120,14 +120,17 @@ export class GhlService {
     appointment: ItemInput,
     contactId: string,
   ): Promise<IAppointment> {
-    if (!appointment.assignedEmployeeId) {
+    if (
+      !appointment.assignedEmployeeIds ||
+      appointment.assignedEmployeeIds.length === 0
+    ) {
       throw new Error('No employee assigned to this item');
     }
     const appointmentData = {
       title: appointment.name,
       appointmentStatus: 'confirmed',
       assignedUserId: (
-        await this.getEmployee(ctx, appointment.assignedEmployeeId)
+        await this.getEmployee(ctx, appointment.assignedEmployeeIds[0])
       )?.id,
       // address: 'Zoom',
       // ignoreDateRange: false,
@@ -139,7 +142,8 @@ export class GhlService {
       contactId,
       startTime: appointment.DateTime[0],
       endTime: new Date(
-        new Date(appointment.DateTime[0]).getTime() + 15 * 60 * 1000,
+        new Date(appointment.DateTime[0]).getTime() +
+          appointment.Duration * 60 * 1000,
       ).toISOString(),
     };
     const response = await axios

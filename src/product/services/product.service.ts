@@ -1,15 +1,10 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
-import { ProductRepository } from '../repositories/product.repository';
 import { CreateProductInput } from '../dto/create-product-input.dto';
-import { UpdateProductInput } from '../dto/update-product-input.dto';
 import { ProductOutput } from '../dto/product-output.dto';
+import { UpdateProductInput } from '../dto/update-product-input.dto';
 import { Product } from '../entities/product.entity';
+import { ProductRepository } from '../repositories/product.repository';
 
 @Injectable()
 export class ProductService {
@@ -115,7 +110,7 @@ export class ProductService {
         id: 8,
         price: 0,
         name: '15-Minute FREE Strategy Call',
-        Duration: 'Unlimited',
+        Duration: 15,
         save: 0,
         badge: {
           text: 'FREE',
@@ -129,7 +124,7 @@ export class ProductService {
         price: 125,
         name: '60-Minute Single Prep',
         save: 75,
-        Duration: 'Unlimited',
+        Duration: 60,
         badge: {
           text: 'Only 3 slots left',
           color: 'bg-orange-500',
@@ -142,7 +137,7 @@ export class ProductService {
         price: 577,
         save: 100,
         name: '5X Prep Session Bundle',
-        Duration: 'Unlimited',
+        Duration: 60,
         badge: {
           text: 'Most Popular',
           color: 'bg-blue-600',
@@ -154,7 +149,7 @@ export class ProductService {
         price: 1100,
         save: 150,
         name: '10X Prep Session Bundle',
-        Duration: 'Unlimited',
+        Duration: 60,
         badge: {
           text: 'Hot Selling',
           color: 'bg-red-500',
@@ -168,6 +163,7 @@ export class ProductService {
         where: { id: productData.id },
       });
 
+      // eslint-disable-next-line unicorn/no-negated-condition
       if (!existingProduct) {
         const product = this.productRepository.create(productData);
         await this.productRepository.save(product);

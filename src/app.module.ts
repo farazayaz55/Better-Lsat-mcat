@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { OrderModule } from './order/order.module';
 import { ProductModule } from './product/product.module';
 import { TaskModule } from './task/task.module';
@@ -21,6 +22,7 @@ import { WebhookModule } from './webhooks/webhook.module';
     OrderModule,
     ProductModule,
     TaskModule,
+    DashboardModule,
     WebhookModule,
     GoogleCalendarModule,
   ],

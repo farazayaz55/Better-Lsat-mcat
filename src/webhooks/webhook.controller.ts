@@ -1,11 +1,18 @@
+/* eslint-disable max-depth */
+/* eslint-disable security/detect-object-injection */
+/* eslint-disable max-statements */
+/* eslint-disable sonarjs/cognitive-complexity */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Headers,
   HttpCode,
+  HttpException,
   HttpStatus,
+  InternalServerErrorException,
   Post,
   RawBodyRequest,
   Req,
@@ -15,11 +22,13 @@ import { AppLogger } from '../shared/logger/logger.service';
 import { ReqContext } from '../shared/request-context/req-context.decorator';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { StripeService } from '../shared/services/stripe.service';
-import { OrderService } from '../order/order.service';
+import { OrderService } from '../order/services/order.service';
 import { GoogleCalendarService } from '../shared/services/google-calendar-api-key.service';
 import { UserService } from '../user/services/user.service';
 import { PaymentStatus } from '../order/interfaces/stripe-metadata.interface';
 import { SlotReservationStatus } from '../order/constants/slot-reservation-status.constant';
+import { OrderOutput } from '../order/dto/order-output.dto';
+import { Order } from '../order/entities/order.entity';
 
 @ApiTags('webhooks')
 @Controller('webhooks')
@@ -128,6 +137,67 @@ export class WebhookController {
     }
   }
 
+  private mapWebhookError(error: any, ctx: RequestContext): HttpException {
+    // Log the full error for debugging
+    this.logger.error(ctx, `Webhook Error Details: ${JSON.stringify(error)}`);
+
+    // Map specific error types to appropriate HTTP status codes
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+
+      // Stripe signature verification errors
+      if (
+        errorMessage.includes('signature') ||
+        errorMessage.includes('webhook')
+      ) {
+        this.logger.warn(ctx, 'Webhook signature verification failed');
+        return new BadRequestException('Invalid webhook signature');
+      }
+
+      // Database/order related errors
+      if (errorMessage.includes('order') || errorMessage.includes('database')) {
+        this.logger.error(
+          ctx,
+          'Database operation failed during webhook processing',
+        );
+        return new InternalServerErrorException(
+          'Failed to process webhook data',
+        );
+      }
+
+      // Payment processing errors
+      if (errorMessage.includes('payment') || errorMessage.includes('stripe')) {
+        this.logger.error(ctx, 'Payment processing error in webhook');
+        return new InternalServerErrorException('Payment processing failed');
+      }
+
+      // Calendar integration errors
+      if (
+        errorMessage.includes('calendar') ||
+        errorMessage.includes('google')
+      ) {
+        this.logger.warn(
+          ctx,
+          'Calendar integration failed, but webhook can continue',
+        );
+        return new InternalServerErrorException('Calendar integration failed');
+      }
+
+      // Validation errors
+      if (
+        errorMessage.includes('validation') ||
+        errorMessage.includes('invalid')
+      ) {
+        this.logger.warn(ctx, 'Webhook data validation failed');
+        return new BadRequestException('Invalid webhook data');
+      }
+    }
+
+    // Default fallback for unknown errors
+    this.logger.error(ctx, 'Unknown webhook error occurred');
+    return new InternalServerErrorException('Webhook processing failed');
+  }
+
   @Post()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Catch-all POST route for debugging' })
@@ -218,7 +288,7 @@ export class WebhookController {
         ctx,
         `Test webhook processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      throw error;
+      throw this.mapWebhookError(error, ctx);
     }
   }
 
@@ -297,6 +367,7 @@ export class WebhookController {
           ctx,
           `Failed to update order ${orderId} after checkout completion: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
+        throw this.mapWebhookError(error, ctx);
       }
     }
   }
@@ -359,6 +430,7 @@ export class WebhookController {
           ctx,
           `Failed to update order ${orderId} after payment intent success: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
+        throw this.mapWebhookError(error, ctx);
       }
     }
   }
@@ -413,37 +485,39 @@ export class WebhookController {
           ctx,
           `Failed to update order ${orderId} after payment failure: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
+        throw this.mapWebhookError(error, ctx);
       }
     }
   }
 
   public async createGoogleCalendarEvents(
     ctx: RequestContext,
-    order: any,
+    order: Order,
   ): Promise<void> {
     try {
       this.logger.log(ctx, `=== CREATING GOOGLE CALENDAR EVENTS ===`);
       this.logger.log(
         ctx,
-        `Order ID: ${order.id}, Customer ID: ${order.customerId}`,
+        `Order ID: ${order.id}, Customer ID: ${order.customer.id}`,
       );
       this.logger.log(ctx, `Number of items: ${order.items?.length || 0}`);
 
       // Get customer email
       this.logger.log(
         ctx,
-        `Getting customer details for ID: ${order.customerId}`,
+        `Getting customer details for ID: ${order.customer.id}`,
       );
       const customer = await this.userService.getUserById(
         ctx,
-        order.customerId,
+        order.customer.id,
       );
       const customerEmail = customer.email;
       this.logger.log(ctx, `Customer email: ${customerEmail}`);
 
       // Process each item in the order
       this.logger.log(ctx, `Processing ${order.items?.length || 0} items...`);
-      for (const item of order.items) {
+      for (let i = 0; i < order.items.length; i++) {
+        const item = order.items[i];
         this.logger.log(ctx, `Processing item: ${item.name} (ID: ${item.id})`);
 
         // Skip GHL items (ID 8) - they're handled separately
@@ -455,42 +529,68 @@ export class WebhookController {
           continue;
         }
 
-        // Get employee email if assigned
-        let employeeEmail: string | undefined;
-        if (item.assignedEmployeeId) {
+        // Validate that we have matching DateTime slots and assigned employees
+        if (
+          !item.DateTime ||
+          !item.assignedEmployeeIds ||
+          item.DateTime.length !== item.assignedEmployeeIds.length
+        ) {
+          this.logger.warn(
+            ctx,
+            `Item ${item.name} (ID: ${item.id}) has mismatched DateTime slots (${item.DateTime?.length || 0}) and assigned employees (${item.assignedEmployeeIds?.length || 0})`,
+          );
+          continue;
+        }
+
+        // Create one Google Calendar event per DateTime slot
+        for (let j = 0; j < item.DateTime.length; j++) {
+          const dateTime = item.DateTime[j];
+          const employeeId = item.assignedEmployeeIds[j];
+
           try {
+            // Get employee email
             const employee = await this.userService.getUserById(
               ctx,
-              item.assignedEmployeeId,
+              employeeId,
             );
-            employeeEmail = employee.email;
-          } catch (error) {
-            this.logger.warn(
+            const employeeEmail = employee.email;
+
+            this.logger.log(
               ctx,
-              `Could not get employee email for ID ${item.assignedEmployeeId}: ${
+              `Creating Google Calendar event for slot ${dateTime} with employee ${employee.name} (${employeeEmail})`,
+            );
+
+            // Create Google Calendar event for this specific slot
+            await this.googleCalendarService.createAppointment(
+              ctx,
+              {
+                ...item,
+                DateTime: [dateTime], // Single slot for this event
+                assignedEmployeeIds: [employeeId], // Single employee for this event
+              },
+              customerEmail,
+              employeeEmail,
+              order.id,
+            );
+
+            this.logger.log(
+              ctx,
+              `Successfully created Google Calendar event for slot ${dateTime}`,
+            );
+          } catch (error) {
+            this.logger.error(
+              ctx,
+              `Failed to create Google Calendar event for slot ${dateTime} with employee ID ${employeeId}: ${
                 error instanceof Error ? error.message : 'Unknown error'
               }`,
             );
           }
         }
-
-        this.logger.log(
-          ctx,
-          `Creating Google Calendar event for item ${item.name} (ID: ${item.id}) with employee email: ${employeeEmail || 'No employee assigned'}`,
-        );
-
-        // Create Google Calendar event
-        await this.googleCalendarService.createAppointment(
-          ctx,
-          item,
-          customerEmail,
-          employeeEmail,
-        );
       }
 
       this.logger.log(
         ctx,
-        `Successfully created Google Calendar events for order ${order.id}`,
+        `Completed Google Calendar events creation for order ${order.id}`,
       );
     } catch (error) {
       this.logger.error(
@@ -499,8 +599,10 @@ export class WebhookController {
           error instanceof Error ? error.message : 'Unknown error'
         }`,
       );
+      throw error;
     }
   }
+
   /**
    * Validates that the slot reservation is still valid before confirming payment
    * @param ctx Request context

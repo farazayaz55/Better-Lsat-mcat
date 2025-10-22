@@ -25,6 +25,9 @@ import {
 } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/role.decorator';
+import { ROLE } from '../auth/constants/role.constant';
 import {
   BaseApiErrorResponse,
   BaseApiResponse,
@@ -44,7 +47,7 @@ import {
   StripeCheckoutSession,
   StripePaymentIntent,
 } from './interfaces/stripe-metadata.interface';
-import { OrderService } from './order.service';
+import { OrderService } from './services/order.service';
 import { ReservationCleanupService } from './reservation-cleanup.service';
 
 @ApiTags('order')
@@ -85,22 +88,22 @@ export class OrderController {
   ): Promise<BaseApiResponse<StripeCheckoutSession | undefined>> {
     const order = await this.orderService.create(ctx, createOrderDto);
     this.logger.log(ctx, `Created order with ID: ${order.id}`);
-    const contact = await this.ghlService.getOrCreateContact(
-      createOrderDto.user,
-    );
+    // const contact = await this.ghlService.getOrCreateContact(
+    //   createOrderDto.user,
+    // );
     //also create appointment in GHL
     // order.items.forEach(async (item) => {
     //   if (item.id === 8) await this.ghlService.createAppointment(ctx, item);
     // });
-    for (const item of order.items) {
-      if (item.id === 8) {
-        //TODO: This GHL flow, creates appointment which needs to be replaced by appointment in google calendar.
-        // once ghl creates appointment, it triggers automations such as sending email to customer, sending sms to customer, etc.
-        // we need to replace that as well
-        await this.ghlService.createAppointment(ctx, item, contact.id);
-      }
-      // Note: Google Calendar events are now created in the webhook after successful payment
-    }
+    // for (const item of order.items) {
+    //   if (item.id === 8) {
+    //     //TODO: This GHL flow, creates appointment which needs to be replaced by appointment in google calendar.
+    //     // once ghl creates appointment, it triggers automations such as sending email to customer, sending sms to customer, etc.
+    //     // we need to replace that as well
+    //     await this.ghlService.createAppointment(ctx, item, contact.id);
+    //   }
+    //   // Note: Google Calendar events are now created in the webhook after successful payment
+    // }
     // Create Stripe checkout session instead of WooCommerce URL
     const stripeSession = await this.orderService.createStripeCheckoutSession(
       ctx,
@@ -124,9 +127,20 @@ export class OrderController {
     status: HttpStatus.OK,
     type: swaggerBaseApiResponse([OrderOutput]),
   })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    type: BaseApiErrorResponse,
+    description: 'Invalid date format',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    type: BaseApiErrorResponse,
+    description: 'Invalid date format',
+  })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
   async findAll(
     @Query() query: GetOrdersQueryParams,
   ): Promise<BaseApiResponse<OrderOutput[]>> {
@@ -156,8 +170,6 @@ export class OrderController {
     const slotsBooked = await this.orderService.getSlotsBooked(
       ctx,
       query.date,
-      query.month,
-      query.year,
       query.packageId,
     );
     return { data: slotsBooked, meta: {} };
@@ -184,8 +196,9 @@ export class OrderController {
     type: BaseApiErrorResponse,
   })
   @UseInterceptors(ClassSerializerInterceptor)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
+  @Roles(ROLE.ADMIN, ROLE.USER)
   async findOne(
     @Param('id') id: string,
   ): Promise<BaseApiResponse<OrderOutput>> {
@@ -213,7 +226,8 @@ export class OrderController {
   })
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
   update(@Param('id') id: string, @Body() updateOrderDto: OrderInput): string {
     //place holder api.
     return this.orderService.update(+id, updateOrderDto);
@@ -227,8 +241,9 @@ export class OrderController {
     status: HttpStatus.NO_CONTENT,
   })
   @UseInterceptors(ClassSerializerInterceptor)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
+  @Roles(ROLE.ADMIN)
   async remove(
     @ReqContext() ctx: RequestContext,
     @Param('id') id: string,

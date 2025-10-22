@@ -19,9 +19,11 @@ export class BaseAclService<Resource> {
     actions: Action[],
     ruleCallback?: RuleCallback<Resource>,
   ): void {
-    ruleCallback
-      ? this.aclRules.push({ role, actions, ruleCallback })
-      : this.aclRules.push({ role, actions });
+    if (ruleCallback) {
+      this.aclRules.push({ role, actions, ruleCallback });
+    } else {
+      this.aclRules.push({ role, actions });
+    }
   }
 
   /**
@@ -33,7 +35,8 @@ export class BaseAclService<Resource> {
     canDoAction: (action: Action, resource?: Resource) => {
       let canDoAction = false;
 
-      for (const actorRole of actor.roles) {
+      const actorRoles = actor.roles ?? [];
+      for (const actorRole of actorRoles) {
         //If already has access, return
         if (canDoAction) {
           true;
@@ -58,16 +61,21 @@ export class BaseAclService<Resource> {
             aclRule.actions.includes(action) ||
             aclRule.actions.includes(Action.MANAGE);
 
+          // If action is not permitted, skip callback entirely
+          if (!hasActionPermission) {
+            canDoAction = false;
+            continue;
+          }
+
           //check for custom `ruleCallback` callback
           if (aclRule.ruleCallback) {
             if (!resource) {
               throw new Error('Resource is required for ruleCallback');
             }
 
-            canDoAction =
-              hasActionPermission && aclRule.ruleCallback(resource, actor);
+            canDoAction = aclRule.ruleCallback(resource, actor);
           } else {
-            canDoAction = hasActionPermission;
+            canDoAction = true;
           }
         }
       }

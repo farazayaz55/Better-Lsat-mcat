@@ -42,13 +42,13 @@ export class CreateProductInput {
   save?: number;
 
   @ApiProperty({
-    description: 'Session duration',
-    example: 'Unlimited',
-    type: String,
+    description: 'Session duration in minutes',
+    example: 60,
+    type: Number,
   })
   @IsNotEmpty({ message: 'Duration is required' })
-  @IsString({ message: 'Duration must be a string' })
-  Duration: string;
+  @IsNumber({}, { message: 'Duration must be a number' })
+  Duration: number;
 
   @ApiProperty({
     description: 'Number of sessions included',

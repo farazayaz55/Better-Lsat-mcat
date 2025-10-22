@@ -27,12 +27,12 @@ export class ItemInput {
   name: string;
 
   @ApiProperty({
-    description: 'Session duration',
-    example: '60 minutes',
-    type: String,
+    description: 'Session duration in minutes',
+    example: 60,
+    type: Number,
   })
-  @IsString()
-  Duration: string;
+  @IsNumber()
+  Duration: number;
 
   @ApiProperty({
     description: 'Item description',
@@ -70,11 +70,15 @@ export class ItemInput {
   @ApiPropertyOptional({
     description: 'ID of assigned employee',
     example: 5,
-    type: Number,
+    type: Array,
+    items: {
+      type: 'number',
+    },
   })
   @IsOptional()
-  @IsNumber()
-  assignedEmployeeId?: number;
+  @IsArray({ each: true })
+  @IsNumber({}, { each: true })
+  assignedEmployeeIds?: number[];
 }
 
 // Array of items

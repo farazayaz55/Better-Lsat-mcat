@@ -46,11 +46,11 @@ export class ProductOutput {
 
   @Expose()
   @ApiProperty({
-    description: 'Session duration',
-    example: 'Unlimited',
-    type: String,
+    description: 'Session duration in minutes',
+    example: 60,
+    type: Number,
   })
-  Duration: string;
+  Duration: number;
 
   @Expose()
   @ApiProperty({

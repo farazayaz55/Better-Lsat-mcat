@@ -23,8 +23,8 @@ export class Product {
   @Column()
   save: number;
 
-  @Column({ length: 100 })
-  Duration: string;
+  @Column()
+  Duration: number;
 
   @Column({ type: 'text' })
   Description: string;

@@ -5,7 +5,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { configModuleOptions } from './configs/module-options';
 import { AllExceptionsFilter } from './filters/all-exceptions.filter';
-import { RBACGuard } from './guards/rbac.guard';
 import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { AppLoggerModule } from './logger/logger.module';
 
@@ -33,7 +32,7 @@ import { AppLoggerModule } from './logger/logger.module';
     }),
     AppLoggerModule,
   ],
-  exports: [AppLoggerModule, ConfigModule, RBACGuard],
+  exports: [AppLoggerModule, ConfigModule],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
 
@@ -41,7 +40,6 @@ import { AppLoggerModule } from './logger/logger.module';
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
     },
-    RBACGuard,
   ],
 })
 export class SharedModule {}

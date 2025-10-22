@@ -1,4 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+/* eslint-disable complexity */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { calendar_v3 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
@@ -78,6 +86,7 @@ export class GoogleCalendarService {
     item: any,
     customerEmail: string,
     employeeEmail?: string,
+    orderId?: number,
   ): Promise<void> {
     try {
       this.logger.log(
@@ -92,6 +101,7 @@ export class GoogleCalendarService {
           dateTime,
           customerEmail,
           employeeEmail,
+          orderId,
         );
       }
     } catch (error) {
@@ -112,11 +122,12 @@ export class GoogleCalendarService {
     dateTime: string,
     customerEmail: string,
     employeeEmail?: string,
+    orderId?: number,
   ): Promise<void> {
     try {
       const startTime = new Date(dateTime);
       const endTime = new Date(
-        startTime.getTime() + this.parseDuration(item.Duration),
+        startTime.getTime() + item.Duration * 60 * 1000, // Use duration directly (minutes to milliseconds)
       );
 
       // Business owner email (you) - this will be the organizer
@@ -175,11 +186,13 @@ export class GoogleCalendarService {
         },
         extendedProperties: {
           private: {
-            orderItemId: item.id.toString(),
+            // note: Google API types allow arbitrary string values in private props
+            orderId: String(orderId),
+            orderItemId: String(item.id),
             customerEmail,
             employeeEmail: employeeEmail || '',
-            quantity: item.quantity.toString(),
-            price: item.price.toString(),
+            quantity: String(item.quantity),
+            price: String(item.price),
             businessOwnerEmail: businessOwnerEmail || '',
           },
         },
@@ -272,9 +285,38 @@ export class GoogleCalendarService {
           error instanceof Error ? error.message : 'Unknown error'
         }`,
       );
-      throw error;
+
+      // Ensure error is of type Error before accessing message
+      let errorMessage: string;
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error
+      ) {
+        // @ts-ignore
+        errorMessage = error.message;
+      } else {
+        errorMessage = String(error);
+      }
+
+      if (errorMessage.includes('Login Required')) {
+        throw new ServiceUnavailableException(
+          'Calendar service temporarily unavailable',
+        );
+      }
+      throw new InternalServerErrorException('Failed to create calendar event');
     }
   }
+
+  /**
+   * Fetches all the tasks from a specific Calendar ( Better-LSAT that should be used for orders)
+   * @param startDate
+   * @param endDate
+   * @param employees
+   * @returns
+   */
 
   // eslint-disable-next-line sonarjs/cognitive-complexity, max-statements
   async getBookedSlots(
@@ -282,7 +324,15 @@ export class GoogleCalendarService {
     endDate: Date,
     employees: User[],
   ): Promise<
-    Map<string, Array<{ employeeId: number; employeeEmail: string }>>
+    Map<
+      string,
+      Array<{
+        employeeId: number;
+        employeeEmail: string;
+        meetingLink: string;
+        invitees: Array<{ email: string }>;
+      }>
+    >
   > {
     try {
       this.logger.log(
@@ -326,10 +376,20 @@ export class GoogleCalendarService {
       }
 
       const data = (await response.json()) as any;
+      console.log('Google data', data);
 
       const bookedSlots = new Map<
         string,
-        Array<{ employeeId: number; employeeEmail: string }>
+        Array<{
+          employeeId: number;
+          employeeEmail: string;
+          meetingLink: string;
+          invitees: Array<{ email: string }>;
+          eventId: string;
+          start?: string;
+          end?: string;
+          privateMeta?: Record<string, any>;
+        }>
       >();
 
       if (data.items) {
@@ -355,7 +415,19 @@ export class GoogleCalendarService {
               `Adding booking for slot: ${slotTime} (from ${event.start.dateTime}) with employee: ${employeeInfo.employeeEmail}`,
             );
             const existingBookings = bookedSlots.get(slotTime) || [];
-            existingBookings.push(employeeInfo);
+            existingBookings.push({
+              ...employeeInfo,
+              meetingLink: event.conferenceData?.entryPoints?.[0]?.uri || '',
+              invitees: event.attendees || [],
+              eventId: (event.id as string) || '',
+              start: event.start?.dateTime
+                ? new Date(event.start.dateTime).toISOString()
+                : undefined,
+              end: event.end?.dateTime
+                ? new Date(event.end.dateTime).toISOString()
+                : undefined,
+              privateMeta: event.extendedProperties?.private || {},
+            });
             bookedSlots.set(slotTime, existingBookings);
           } else {
             this.logger.log(
@@ -451,9 +523,18 @@ export class GoogleCalendarService {
       const busyEmployeeIds =
         slotBookings.get(dateTime)?.map((b) => b.employeeId) || [];
 
-      const availableEmployees = employees.filter(
-        (emp) => !busyEmployeeIds.includes(emp.id),
-      );
+      // Filter out busy employees AND check work hours
+      const availableEmployees = employees.filter((emp) => {
+        const isNotBusy = !busyEmployeeIds.includes(emp.id);
+        const isAvailableAtTime = this.isEmployeeAvailableAtTime(emp, dateTime);
+
+        this.logger.log(
+          new RequestContext(),
+          `🔍 DEBUG: Employee ${emp.name} (${emp.id}) - Not busy: ${isNotBusy}, Available at time: ${isAvailableAtTime}`,
+        );
+
+        return isNotBusy && isAvailableAtTime;
+      });
 
       this.logger.log(
         new RequestContext(),
@@ -470,6 +551,57 @@ export class GoogleCalendarService {
       );
       return employees; // Return all employees as fallback
     }
+  }
+
+  // Helper method to check if employee is available at specific time based on workHours
+  private isEmployeeAvailableAtTime(employee: User, slotTime: string): boolean {
+    const slotDate = new Date(slotTime);
+    const dayOfWeek = this.getDayOfWeekName(slotDate.getDay());
+    const slotHour = slotDate.getUTCHours();
+    const slotMinute = slotDate.getUTCMinutes();
+    const slotTimeInMinutes = slotHour * 60 + slotMinute;
+
+    // Get employee's working hours for this day
+    // eslint-disable-next-line security/detect-object-injection
+    const dayWorkHours = employee.workHours?.[dayOfWeek] || [];
+
+    if (dayWorkHours.length === 0) {
+      return false; // No working hours defined for this day
+    }
+
+    // Check if slot time falls within any working hour range
+    for (const timeRange of dayWorkHours) {
+      const [startTime, endTime] = timeRange.split('-');
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+
+      const startTimeInMinutes = startHour * 60 + startMin;
+      const endTimeInMinutes = endHour * 60 + endMin;
+
+      if (
+        slotTimeInMinutes >= startTimeInMinutes &&
+        slotTimeInMinutes < endTimeInMinutes
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Helper method to get day name from day number
+  private getDayOfWeekName(dayNumber: number): string {
+    const days = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ];
+    // eslint-disable-next-line security/detect-object-injection
+    return days[dayNumber];
   }
 
   // Method to manually set OAuth2 credentials
@@ -544,23 +676,13 @@ export class GoogleCalendarService {
     }
   }
 
-  private parseDuration(duration: string): number {
-    const match = duration.match(/(\d+)([hm])/);
-    if (!match) {
-      return 60 * 60 * 1000;
-    } // Default to 1 hour
-
-    const value = parseInt(match[1]);
-    const unit = match[2];
-
-    if (unit === 'h') {
-      return value * 60 * 60 * 1000; // Convert hours to milliseconds
-    } else if (unit === 'm') {
-      return value * 60 * 1000; // Convert minutes to milliseconds
-    }
-
-    return 60 * 60 * 1000; // Default to 1 hour
-  }
+  /**
+   * The task should be created in primary calendar
+   * @param ctx
+   * @param task
+   * @param tutorEmail
+   * @returns
+   */
 
   // Task-specific methods
   async createTaskEvent(
@@ -613,22 +735,76 @@ export class GoogleCalendarService {
             { method: 'popup', minutes: 30 }, // 30 minutes before
           ],
         },
+        extendedProperties: {
+          private: {
+            taskId: task.id.toString(),
+            tutorEmail,
+            priority: task.priority,
+            status: task.status,
+            label: task.label,
+            businessOwnerEmail: businessOwnerEmail || '',
+            organizerUserId: String(ctx.user!.id),
+            organizerRoles: Array.isArray(ctx.user?.roles)
+              ? ctx.user!.roles.join(',')
+              : '',
+          },
+        },
       };
 
-      const calendar = new calendar_v3.Calendar({
-        version: 'v3',
-        auth: this.oauth2Client,
-      });
+      // Create the event - Use configured calendar ID
+      const calendarId =
+        this.configService.get<string>('googleCalendar.calendarId') ||
+        'c_41f0af94200759137f30305f470ef7853a4020e41c5b160eedf7dea7cae3db9a@group.calendar.google.com';
+      this.logger.log(ctx, `Creating task event in calendar: ${calendarId}`);
 
-      const calendarId = this.configService.get<string>('googleCalendar.calendarId');
-      const response = await calendar.events.insert({
-        calendarId,
-        requestBody: event,
-      });
+      try {
+        // Ensure OAuth2 credentials are set and refreshed before making the API call
+        await this.ensureValidCredentials(ctx);
 
-      const eventId = response.data.id;
-      this.logger.log(ctx, `Created Google Calendar event with ID: ${eventId}`);
-      return eventId;
+        // Get the refreshed access token
+        const credentials = this.oauth2Client.credentials;
+        if (!credentials.access_token) {
+          throw new Error('No access token available');
+        }
+
+        // Use raw HTTP request to create events (same approach that worked for appointments)
+        const response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${credentials.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              ...event,
+              sendUpdates: 'all', // Send invitations to all attendees
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const eventData = (await response.json()) as any;
+
+        this.logger.log(
+          ctx,
+          `Created Google Calendar event: ${eventData.id} for task ${task.title}`,
+        );
+
+        return eventData.id;
+      } catch (insertError) {
+        this.logger.error(
+          ctx,
+          `Failed to insert task event into calendar ${calendarId}: ${
+            insertError instanceof Error ? insertError.message : 'Unknown error'
+          }`,
+        );
+        throw insertError;
+      }
     } catch (error) {
       this.logger.error(
         ctx,
@@ -686,25 +862,66 @@ export class GoogleCalendarService {
         ],
         reminders: {
           useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 30 },
-          ],
+          overrides: [{ method: 'popup', minutes: 30 }],
+        },
+        extendedProperties: {
+          private: {
+            taskId: task.id.toString(),
+            tutorEmail,
+            priority: task.priority,
+            status: task.status,
+            label: task.label,
+            businessOwnerEmail: businessOwnerEmail || '',
+          },
         },
       };
 
-      const calendar = new calendar_v3.Calendar({
-        version: 'v3',
-        auth: this.oauth2Client,
-      });
+      // Create the event - Use configured calendar ID
+      const calendarId =
+        this.configService.get<string>('googleCalendar.calendarId') ||
+        'c_41f0af94200759137f30305f470ef7853a4020e41c5b160eedf7dea7cae3db9a@group.calendar.google.com';
 
-      const calendarId = this.configService.get<string>('googleCalendar.calendarId');
-      await calendar.events.update({
-        calendarId,
-        eventId,
-        requestBody: event,
-      });
+      try {
+        // Ensure OAuth2 credentials are set and refreshed before making the API call
+        await this.ensureValidCredentials(ctx);
 
-      this.logger.log(ctx, `Updated Google Calendar event: ${eventId}`);
+        // Get the refreshed access token
+        const credentials = this.oauth2Client.credentials;
+        if (!credentials.access_token) {
+          throw new Error('No access token available');
+        }
+
+        // Use raw HTTP request to update events (same approach that worked for appointments)
+        const response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${credentials.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              ...event,
+              sendUpdates: 'all', // Send invitations to all attendees
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        this.logger.log(ctx, `Updated Google Calendar event: ${eventId}`);
+      } catch (updateError) {
+        this.logger.error(
+          ctx,
+          `Failed to update task event in calendar ${calendarId}: ${
+            updateError instanceof Error ? updateError.message : 'Unknown error'
+          }`,
+        );
+        throw updateError;
+      }
     } catch (error) {
       this.logger.error(
         ctx,
@@ -720,18 +937,48 @@ export class GoogleCalendarService {
     try {
       this.logger.log(ctx, `Deleting Google Calendar event: ${eventId}`);
 
-      const calendar = new calendar_v3.Calendar({
-        version: 'v3',
-        auth: this.oauth2Client,
-      });
+      // Create the event - Use configured calendar ID
+      const calendarId =
+        this.configService.get<string>('googleCalendar.calendarId') ||
+        'c_41f0af94200759137f30305f470ef7853a4020e41c5b160eedf7dea7cae3db9a@group.calendar.google.com';
 
-      const calendarId = this.configService.get<string>('googleCalendar.calendarId');
-      await calendar.events.delete({
-        calendarId,
-        eventId,
-      });
+      try {
+        // Ensure OAuth2 credentials are set and refreshed before making the API call
+        await this.ensureValidCredentials(ctx);
 
-      this.logger.log(ctx, `Deleted Google Calendar event: ${eventId}`);
+        // Get the refreshed access token
+        const credentials = this.oauth2Client.credentials;
+        if (!credentials.access_token) {
+          throw new Error('No access token available');
+        }
+
+        // Use raw HTTP request to delete events (same approach that worked for appointments)
+        const response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
+          {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${credentials.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        this.logger.log(ctx, `Deleted Google Calendar event: ${eventId}`);
+      } catch (deleteError) {
+        this.logger.error(
+          ctx,
+          `Failed to delete task event from calendar ${calendarId}: ${
+            deleteError instanceof Error ? deleteError.message : 'Unknown error'
+          }`,
+        );
+        throw deleteError;
+      }
     } catch (error) {
       this.logger.error(
         ctx,

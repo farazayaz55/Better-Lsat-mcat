@@ -2,6 +2,7 @@ import { Expose, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserOutput } from '../../user/dtos/user-output.dto';
 import { SlotReservationStatus } from '../constants/slot-reservation-status.constant';
+import { IsArray, IsNumber } from 'class-validator';
 
 export class Badge {
   @Expose()
@@ -35,8 +36,8 @@ export class ItemOutput {
   name: string;
 
   @Expose()
-  @ApiProperty({ description: 'Session duration', example: '60 minutes' })
-  Duration: string;
+  @ApiProperty({ description: 'Session duration in minutes', example: 60 })
+  Duration: number;
 
   @Expose()
   @ApiPropertyOptional({
@@ -80,8 +81,16 @@ export class ItemOutput {
   quantity: number;
 
   @Expose()
-  @ApiProperty({ description: 'Assigned employee ID', example: 5 })
-  assignedEmployeeId: number;
+  @ApiProperty({
+    description: 'Assigned employee IDs',
+    example: [5, 6],
+    type: Array,
+    items: { type: 'number' },
+  })
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @Type(() => Number)
+  assignedEmployeeIds: number[];
 }
 
 export class OrderOutput {

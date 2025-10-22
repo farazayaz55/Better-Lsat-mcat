@@ -21,22 +21,26 @@ import {
   ApiExtraModels,
 } from '@nestjs/swagger';
 
-import { AppLogger } from '../shared/logger/logger.service';
-import { RequestContext } from '../shared/request-context/request-context.dto';
-import { ReqContext } from '../shared/request-context/req-context.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RBACGuard } from '../shared/guards/rbac.guard';
-import { Roles } from '../auth/decorators/role.decorator';
-import { swaggerBaseApiResponse, BaseApiResponse } from '../shared/dtos/base-api-response.dto';
-import { TaskService } from './task.service';
-import { TaskInputDto } from './dto/task-input.dto';
-import { TaskOutputDto } from './dto/task-output.dto';
-import { TaskQueryDto } from './dto/task-query.dto';
+import { AppLogger } from '../../shared/logger/logger.service';
+import { RequestContext } from '../../shared/request-context/request-context.dto';
+import { ReqContext } from '../../shared/request-context/req-context.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { Roles } from '../../auth/decorators/role.decorator';
+import {
+  swaggerBaseApiResponse,
+  BaseApiResponse,
+} from '../../shared/dtos/base-api-response.dto';
+import { TaskService } from '../service/task.service';
+import { TaskInputDto } from '../dto/task-input.dto';
+import { TaskOutputDto } from '../dto/task-output.dto';
+import { TaskQueryDto } from '../dto/task-query.dto';
+import { ROLE } from '../../auth/constants/role.constant';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 
 @ApiTags('task')
 @Controller('task')
 @ApiExtraModels(TaskInputDto, TaskOutputDto, TaskQueryDto)
-@UseGuards(JwtAuthGuard, RBACGuard)
+@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @UseInterceptors(ClassSerializerInterceptor)
 export class TaskController {
@@ -48,7 +52,8 @@ export class TaskController {
   }
 
   @Post()
-  @Roles('ADMIN')
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Create Task' })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponse({
@@ -65,7 +70,7 @@ export class TaskController {
   }
 
   @Get()
-  @Roles('ADMIN')
+  @Roles(ROLE.ADMIN, ROLE.USER)
   @ApiOperation({ summary: 'Get Tasks List' })
   @HttpCode(HttpStatus.OK)
   @ApiResponse({
@@ -82,7 +87,7 @@ export class TaskController {
   }
 
   @Get('tutor/:tutorId')
-  @Roles('ADMIN')
+  @Roles(ROLE.ADMIN, ROLE.USER)
   @ApiOperation({ summary: 'Get Tasks by Tutor' })
   @HttpCode(HttpStatus.OK)
   @ApiResponse({
@@ -99,7 +104,7 @@ export class TaskController {
   }
 
   @Get(':id')
-  @Roles('ADMIN')
+  @Roles(ROLE.ADMIN, ROLE.USER)
   @ApiOperation({ summary: 'Get Task by ID' })
   @HttpCode(HttpStatus.OK)
   @ApiResponse({
@@ -116,7 +121,7 @@ export class TaskController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN')
+  @Roles(ROLE.ADMIN, ROLE.USER)
   @ApiOperation({ summary: 'Update Task' })
   @HttpCode(HttpStatus.OK)
   @ApiResponse({
@@ -134,7 +139,7 @@ export class TaskController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN')
+  @Roles(ROLE.ADMIN, ROLE.USER)
   @ApiOperation({ summary: 'Delete Task' })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiResponse({

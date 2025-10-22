@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { plainToClass } from 'class-transformer';
@@ -13,7 +9,6 @@ import { GhlService } from '../../shared/services/Ghl.service';
 import { CreateUserInput } from '../../user/dtos/user-create-input.dto';
 import { UserOutput } from '../../user/dtos/user-output.dto';
 import { UserService } from '../../user/services/user.service';
-import { ROLE } from '../constants/role.constant';
 import { RegisterInput } from '../dtos/auth-register-input.dto';
 import { RegisterOutput } from '../dtos/auth-register-output.dto';
 import {
