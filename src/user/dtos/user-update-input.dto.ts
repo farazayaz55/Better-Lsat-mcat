@@ -5,10 +5,10 @@ import {
   IsEmail,
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
-  Length,
   MaxLength,
 } from 'class-validator';
 import { ROLE } from '../../auth/constants/role.constant';
@@ -92,4 +92,13 @@ export class UpdateUserInput {
   @IsOptional()
   @IsObject({ message: 'Work hours must be an object' })
   workHours?: Record<string, string[]>;
+
+  @ApiPropertyOptional({
+    description: 'Last assigned order count for round-robin assignment',
+    example: 5,
+    type: Number,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'lastAssignedOrderCount must be a number' })
+  lastAssignedOrderCount?: number;
 }

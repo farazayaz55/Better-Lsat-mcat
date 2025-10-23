@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  HttpException,
   Injectable,
   InternalServerErrorException,
   ServiceUnavailableException,
@@ -8,7 +7,6 @@ import {
 import Stripe from 'stripe';
 import { AppLogger } from '../logger/logger.service';
 import { RequestContext } from '../request-context/request-context.dto';
-import { BaseApiException } from '../exceptions/base-api.exception';
 
 export interface StripePaymentIntentData {
   amount: number; // Amount in cents
@@ -125,43 +123,51 @@ export class StripeService {
     // Map specific Stripe errors to user-friendly messages
     if (error?.code) {
       switch (error.code) {
-        case 'card_declined':
+        case 'card_declined': {
           return new BadRequestException(
             'Your card was declined. Please try a different payment method.',
           );
+        }
 
-        case 'expired_card':
+        case 'expired_card': {
           return new BadRequestException(
             'Your card has expired. Please use a different card.',
           );
+        }
 
-        case 'incorrect_cvc':
+        case 'incorrect_cvc': {
           return new BadRequestException(
             'The security code on your card is incorrect.',
           );
+        }
 
-        case 'insufficient_funds':
+        case 'insufficient_funds': {
           return new BadRequestException('Your card has insufficient funds.');
+        }
 
-        case 'processing_error':
+        case 'processing_error': {
           return new ServiceUnavailableException(
             'Payment processing is temporarily unavailable. Please try again.',
           );
+        }
 
-        case 'rate_limit':
+        case 'rate_limit': {
           return new ServiceUnavailableException(
             'Too many requests. Please wait a moment and try again.',
           );
+        }
 
-        case 'authentication_required':
+        case 'authentication_required': {
           return new BadRequestException(
             'Additional authentication is required for this payment.',
           );
+        }
 
-        default:
+        default: {
           return new InternalServerErrorException(
             'Payment service error. Please try again.',
           );
+        }
       }
     }
   }

@@ -1,13 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
+  IsISO8601,
   IsNotEmpty,
   IsNumber,
-  Min,
+  IsOptional,
   IsString,
-  IsISO8601,
-  IsBoolean,
+  Min,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
 
 export class SlotsQueryDto {
   @ApiProperty({
@@ -37,6 +37,7 @@ export class SlotsQueryDto {
     example: 'America/New_York',
     required: false,
   })
+  @IsOptional()
   @IsString()
   customerTimezone?: string;
 }

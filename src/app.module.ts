@@ -10,6 +10,7 @@ import { ProductModule } from './product/product.module';
 import { TaskModule } from './task/task.module';
 import { GoogleCalendarModule } from './shared/google-calendar.module';
 import { SharedModule } from './shared/shared.module';
+import { SlotModule } from './shared/slot/slot.module';
 import { UserModule } from './user/user.module';
 import { WebhookModule } from './webhooks/webhook.module';
 
@@ -25,6 +26,7 @@ import { WebhookModule } from './webhooks/webhook.module';
     DashboardModule,
     WebhookModule,
     GoogleCalendarModule,
+    SlotModule, // Add SlotModule to register SlotController
   ],
   controllers: [AppController],
   providers: [AppService],

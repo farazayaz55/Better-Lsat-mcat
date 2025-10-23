@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
-import { OrderService } from '../order/services/order.service';
+import { AnalyticsService } from '../order/services/analytics.service';
 import { UserService } from '../user/services/user.service';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import {
@@ -14,7 +14,7 @@ import { TimePeriodCalculator } from './constants/time-period.constant';
 @Injectable()
 export class DashboardService {
   constructor(
-    private readonly orderService: OrderService,
+    private readonly analyticsService: AnalyticsService,
     private readonly userService: UserService,
     private readonly logger: AppLogger,
   ) {
@@ -32,7 +32,7 @@ export class DashboardService {
 
     // Get top customers if requested
     if (query.includeTopCustomers) {
-      data.topCustomers = await this.orderService.getTopCustomers(
+      data.topCustomers = await this.analyticsService.getTopCustomers(
         ctx,
         dateRange,
         query.topCustomersLimit ?? 10,
@@ -41,7 +41,7 @@ export class DashboardService {
 
     // Get revenue data if requested
     if (query.includeRevenue) {
-      data.revenue = await this.orderService.getRevenueData(
+      data.revenue = await this.analyticsService.getRevenueData(
         ctx,
         dateRange,
         query.period,
@@ -50,7 +50,7 @@ export class DashboardService {
 
     // Get appointments data if requested
     if (query.includeAppointments) {
-      data.appointments = await this.orderService.getAppointmentsData(
+      data.appointments = await this.analyticsService.getAppointmentsData(
         ctx,
         dateRange,
         query.period,

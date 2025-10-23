@@ -7,6 +7,8 @@ import { configModuleOptions } from './configs/module-options';
 import { AllExceptionsFilter } from './filters/all-exceptions.filter';
 import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { AppLoggerModule } from './logger/logger.module';
+import { EmployeeAvailabilityService } from './slot/services/employee-availability.service';
+import { GoogleCalendarModule } from './services/google-calendar/google-calendar.module';
 
 @Module({
   imports: [
@@ -31,8 +33,14 @@ import { AppLoggerModule } from './logger/logger.module';
       }),
     }),
     AppLoggerModule,
+    GoogleCalendarModule,
   ],
-  exports: [AppLoggerModule, ConfigModule],
+  exports: [
+    AppLoggerModule,
+    ConfigModule,
+    EmployeeAvailabilityService,
+    GoogleCalendarModule,
+  ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
 
@@ -40,6 +48,7 @@ import { AppLoggerModule } from './logger/logger.module';
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
     },
+    EmployeeAvailabilityService,
   ],
 })
 export class SharedModule {}

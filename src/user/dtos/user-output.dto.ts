@@ -31,4 +31,12 @@ export class UserOutput extends BaseUserOutput {
     type: 'number',
   })
   ordersCount: number;
+
+  @Expose()
+  @ApiProperty({
+    description: 'Last assigned order count for round-robin assignment',
+    example: 5,
+    type: 'number',
+  })
+  lastAssignedOrderCount: number;
 }

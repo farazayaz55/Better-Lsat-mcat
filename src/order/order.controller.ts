@@ -39,24 +39,23 @@ import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
-import { SlotsQueryDto } from './dto/slots.query.dto';
 import { GetOrdersQueryParams } from './interfaces/get-orders-query.interface';
-import { Slot } from './interfaces/slot.interface';
 import {
   PaymentStatus,
   StripeCheckoutSession,
   StripePaymentIntent,
 } from './interfaces/stripe-metadata.interface';
 import { OrderService } from './services/order.service';
+import { PaymentService } from './services/payment.service';
 import { ReservationCleanupService } from './reservation-cleanup.service';
 
 @ApiTags('order')
 @Controller('order')
-@ApiExtraModels(SlotsQueryDto)
 @ApiExtraModels(GetOrdersQueryParams)
 export class OrderController {
   constructor(
     private readonly orderService: OrderService,
+    private readonly paymentService: PaymentService,
     private readonly logger: AppLogger,
     private readonly ghlService: GhlService,
     private readonly configService: ConfigService,
@@ -64,13 +63,6 @@ export class OrderController {
   ) {
     this.logger.setContext(OrderController.name);
   }
-
-  // @Get('woocommerce')
-  // @ApiOperation({ summary: 'Get WooCommerce Orders' })
-  // @HttpCode(HttpStatus.OK)
-  // async getWooCommerceOrders() {
-  //   return await this.orderService.getWooCommerceOrders();
-  // }
 
   @Post()
   @ApiOperation({ summary: 'Create Order' })
@@ -88,24 +80,8 @@ export class OrderController {
   ): Promise<BaseApiResponse<StripeCheckoutSession | undefined>> {
     const order = await this.orderService.create(ctx, createOrderDto);
     this.logger.log(ctx, `Created order with ID: ${order.id}`);
-    // const contact = await this.ghlService.getOrCreateContact(
-    //   createOrderDto.user,
-    // );
-    //also create appointment in GHL
-    // order.items.forEach(async (item) => {
-    //   if (item.id === 8) await this.ghlService.createAppointment(ctx, item);
-    // });
-    // for (const item of order.items) {
-    //   if (item.id === 8) {
-    //     //TODO: This GHL flow, creates appointment which needs to be replaced by appointment in google calendar.
-    //     // once ghl creates appointment, it triggers automations such as sending email to customer, sending sms to customer, etc.
-    //     // we need to replace that as well
-    //     await this.ghlService.createAppointment(ctx, item, contact.id);
-    //   }
-    //   // Note: Google Calendar events are now created in the webhook after successful payment
-    // }
     // Create Stripe checkout session instead of WooCommerce URL
-    const stripeSession = await this.orderService.createStripeCheckoutSession(
+    const stripeSession = await this.paymentService.createStripeCheckoutSession(
       ctx,
       order.id,
     );
@@ -150,37 +126,6 @@ export class OrderController {
       query.orderStatus,
     );
     return { data: orders, meta: { total: count } };
-  }
-
-  /**get for specific month */
-  @Get('slots')
-  @ApiOperation({
-    summary: 'Get Slots',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    type: swaggerBaseApiResponse(Slot),
-    description: 'Available and booked slots for the specified date',
-  })
-  // @UseInterceptors(ClassSerializerInterceptor)
-  async findBookings(
-    @ReqContext() ctx: RequestContext,
-    @Query() query: SlotsQueryDto,
-  ): Promise<BaseApiResponse<Slot>> {
-    const slotsBooked = await this.orderService.getSlotsBooked(
-      ctx,
-      query.date,
-      query.packageId,
-    );
-    return { data: slotsBooked, meta: {} };
-    // return await this.orderService.getSlotsBooked(
-    //   ctx,
-    //   date,
-    //   month,
-    //   year,
-    //   packageId,
-    //   timezone,
-    // );
   }
 
   @Get(':id')
@@ -228,9 +173,12 @@ export class OrderController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(ROLE.ADMIN, ROLE.USER)
-  update(@Param('id') id: string, @Body() updateOrderDto: OrderInput): string {
+  async update(
+    @Param('id') id: string,
+    @Body() updateOrderDto: OrderInput,
+  ): Promise<void> {
     //place holder api.
-    return this.orderService.update(+id, updateOrderDto);
+    return await this.orderService.updateOrder(+id, updateOrderDto);
   }
 
   @Delete(':id')
@@ -265,7 +213,10 @@ export class OrderController {
     @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
   ): Promise<BaseApiResponse<StripeCheckoutSession | undefined>> {
-    const data = await this.orderService.createStripeCheckoutSession(ctx, +id);
+    const data = await this.paymentService.createStripeCheckoutSession(
+      ctx,
+      +id,
+    );
     return { data, meta: {} };
   }
 
@@ -282,7 +233,7 @@ export class OrderController {
     @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
   ): Promise<BaseApiResponse<StripePaymentIntent | undefined>> {
-    const data = await this.orderService.createStripePaymentIntent(ctx, +id);
+    const data = await this.paymentService.createStripePaymentIntent(ctx, +id);
     return { data, meta: {} };
   }
 
@@ -298,7 +249,7 @@ export class OrderController {
     @ReqContext() ctx: RequestContext,
     @Body() body: { paymentIntentId: string },
   ): Promise<BaseApiResponse<boolean>> {
-    const data = await this.orderService.confirmStripePayment(
+    const data = await this.paymentService.confirmStripePayment(
       ctx,
       body.paymentIntentId,
     );

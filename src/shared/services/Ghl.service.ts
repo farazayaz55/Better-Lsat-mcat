@@ -7,6 +7,7 @@ import { ItemInput } from '../../order/interfaces/item.interface';
 import { UserInput } from '../../order/interfaces/user.interface';
 import { UserService } from '../../user/services/user.service';
 import { RequestContext } from '../request-context/request-context.dto';
+import { AppLogger } from '../logger/logger.service';
 import {
   IOeleteUserResponse,
   IGhlUser,
@@ -20,7 +21,12 @@ export class GhlService {
   private baseUrl = 'https://services.leadconnectorhq.com';
   private apiKey = process.env.GHL_TOKEN;
 
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly logger: AppLogger,
+  ) {
+    this.logger.setContext(GhlService.name);
+  }
 
   async createUser(user: RegisterInput): Promise<IGhlUser> {
     const requestBody = {
@@ -53,7 +59,10 @@ export class GhlService {
       })
       .then((res) => res)
       .catch((error) => {
-        console.error(error.response.data);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to create user in GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to create user in GHL');
       });
     return response.data;
@@ -72,7 +81,10 @@ export class GhlService {
       })
       .then((res) => res)
       .catch((error) => {
-        console.error(error.response.data);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to delete user in GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to delete user in GHL');
       });
     return response.data;
@@ -91,7 +103,10 @@ export class GhlService {
       })
       .then((res) => res)
       .catch((error) => {
-        console.error('error', error);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to get employees in GHL: ${JSON.stringify(error)}`,
+        );
         throw new Error('Failed to get employees in GHL');
       });
     const data = response.data.users;
@@ -110,7 +125,10 @@ export class GhlService {
       );
       return employee;
     } catch (error) {
-      console.error(error);
+      this.logger.error(
+        new RequestContext(),
+        `Failed to get employee in GHL: ${JSON.stringify(error)}`,
+      );
       throw new Error('Failed to get employee in GHL');
     }
   }
@@ -160,7 +178,10 @@ export class GhlService {
         return res;
       })
       .catch((error) => {
-        console.error('err create appointment', error.response.data);
+        this.logger.error(
+          ctx,
+          `Failed to create appointment in GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to create appointment in GHL');
       });
     return response.data;
@@ -180,7 +201,10 @@ export class GhlService {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((res: any) => res)
       .catch((error) => {
-        console.error(error.response.data);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to get calendar in GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to get calendar in GHL');
       });
     return response.data.calendar;
@@ -211,7 +235,10 @@ export class GhlService {
       return response.data.calendar;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      console.error(error);
+      this.logger.error(
+        new RequestContext(),
+        `Failed to add user to calendar in GHL: ${JSON.stringify(error)}`,
+      );
       throw new Error('Failed to add user to calendar in GHL');
     }
   }
@@ -233,7 +260,10 @@ export class GhlService {
       )
       .then((res) => res)
       .catch((error) => {
-        console.error(error.response.data);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to get slots in GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to get slots in GHL');
       });
 
@@ -242,7 +272,10 @@ export class GhlService {
   }
 
   async getContact(email: string): Promise<IGhlContact | undefined> {
-    console.log('getContact called with email:', email);
+    this.logger.log(
+      new RequestContext(),
+      `getContact called with email: ${email}`,
+    );
     const response = await axios
       .get(
         `${this.baseUrl}/contacts/?locationId=${process.env.GHL_LOCATION_ID}&query=${email}`,
@@ -257,23 +290,29 @@ export class GhlService {
         },
       )
       .then((res) => {
-        console.log('Email search response:', res.data);
+        this.logger.log(
+          new RequestContext(),
+          `Email search response: ${JSON.stringify(res.data)}`,
+        );
         return res;
       })
       .catch((error) => {
-        console.error('err get contact', error.response?.data);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to get contact in GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to get contact in GHL');
       });
     const contact = response.data.contacts[0];
-    console.log(
-      'Email search result:',
-      contact ? 'Found contact' : 'No contact found',
+    this.logger.log(
+      new RequestContext(),
+      `Email search result: ${contact ? 'Found contact' : 'No contact found'}`,
     );
     return contact;
   }
 
   async getAllContacts(): Promise<IGhlContact[]> {
-    console.log('getAllContacts called');
+    this.logger.log(new RequestContext(), 'getAllContacts called');
     const response = await axios
       .get(
         `${this.baseUrl}/contacts/?locationId=${process.env.GHL_LOCATION_ID}`,
@@ -288,29 +327,33 @@ export class GhlService {
         },
       )
       .then((res) => {
-        console.log(
-          'All contacts response count:',
-          res.data.contacts?.length || 0,
+        this.logger.log(
+          new RequestContext(),
+          `All contacts response count: ${res.data.contacts?.length || 0}`,
         );
         return res;
       })
       .catch((error) => {
-        console.error('err get all contacts', error.response?.data);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to get all contacts from GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to get all contacts from GHL');
       });
     return response.data.contacts || [];
   }
 
   async getContactByPhone(phone: string): Promise<IGhlContact | undefined> {
-    console.log('getContactByPhone called with phone:', phone);
+    this.logger.log(
+      new RequestContext(),
+      `getContactByPhone called with phone: ${phone}`,
+    );
 
     try {
       const allContacts = await this.getAllContacts();
-      console.log(
-        'Searching through',
-        allContacts.length,
-        'contacts for phone:',
-        phone,
+      this.logger.log(
+        new RequestContext(),
+        `Searching through ${allContacts.length} contacts for phone: ${phone}`,
       );
 
       // Normalize phone number for comparison (remove spaces, dashes, parentheses)
@@ -334,56 +377,80 @@ export class GhlService {
         );
       });
 
-      console.log(
-        'Phone search result:',
-        contact ? 'Found contact' : 'No contact found',
+      this.logger.log(
+        new RequestContext(),
+        `Phone search result: ${contact ? 'Found contact' : 'No contact found'}`,
       );
 
       return contact;
     } catch (error) {
-      console.error('Error in getContactByPhone:', error);
+      this.logger.error(
+        new RequestContext(),
+        `Error in getContactByPhone: ${JSON.stringify(error)}`,
+      );
       throw error;
     }
   }
 
   // eslint-disable-next-line sonarjs/cognitive-complexity
   async getOrCreateContact(user: UserInput): Promise<IGhlContact> {
-    console.log('getOrCreateContact called with:', {
-      email: user.email,
-      phone: user.phone,
-    });
+    this.logger.log(
+      new RequestContext(),
+      `getOrCreateContact called with: ${JSON.stringify({
+        email: user.email,
+        phone: user.phone,
+      })}`,
+    );
 
     // First try to find by email
     let contact = await this.getContact(user.email);
-    console.log('Contact found by email:', contact ? 'Yes' : 'No');
+    this.logger.log(
+      new RequestContext(),
+      `Contact found by email: ${contact ? 'Yes' : 'No'}`,
+    );
 
     // If not found by email, try to find by phone
     if (!contact && user.phone) {
-      console.log('Searching by phone:', user.phone);
+      this.logger.log(
+        new RequestContext(),
+        `Searching by phone: ${user.phone}`,
+      );
       contact = await this.getContactByPhone(user.phone);
-      console.log('Contact found by phone:', contact ? 'Yes' : 'No');
+      this.logger.log(
+        new RequestContext(),
+        `Contact found by phone: ${contact ? 'Yes' : 'No'}`,
+      );
     }
 
     // If still not found, create a new contact
     if (!contact) {
-      console.log('No contact found, attempting to create new contact');
+      this.logger.log(
+        new RequestContext(),
+        'No contact found, attempting to create new contact',
+      );
       try {
         contact = await this.createContact(user);
-        console.log('Contact created successfully');
+        this.logger.log(new RequestContext(), 'Contact created successfully');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
-        console.log('Contact creation failed:', error.response?.data);
+        this.logger.log(
+          new RequestContext(),
+          `Contact creation failed: ${JSON.stringify(error.response?.data)}`,
+        );
         // If creation fails due to duplicate phone, try to find by phone again
         if (
           error.response?.data?.message &&
           error.response.data.message.includes('duplicated contacts') &&
           user.phone
         ) {
-          console.log('Duplicate contact detected, searching by phone again');
+          this.logger.log(
+            new RequestContext(),
+            'Duplicate contact detected, searching by phone again',
+          );
           contact = await this.getContactByPhone(user.phone);
-          console.log(
-            'Contact found after duplicate error:',
-            contact ? 'Yes' : 'No',
+          this.logger.log(
+            new RequestContext(),
+            `Contact found after duplicate error: ${contact ? 'Yes' : 'No'}`,
           );
         } else {
           throw error;
@@ -404,66 +471,6 @@ export class GhlService {
       locationId: process.env.GHL_LOCATION_ID,
       // "gender": "male",
       phone: user.phone,
-      // "address1": "3535 1st St N",
-      // "city": "Dolomite",
-      // "state": "AL",
-      // "postalCode": "35061",
-      // "website": "https://www.tesla.com",
-      // "timezone": "America/Chihuahua",
-      // "dnd": true,
-      // "dndSettings": {
-      //   "Call": {
-      //     "status": "active",
-      //     "message": "string",
-      //     "code": "string"
-      //   },
-      //   "Email": {
-      //     "status": "active",
-      //     "message": "string",
-      //     "code": "string"
-      //   },
-      //   "SMS": {
-      //     "status": "active",
-      //     "message": "string",
-      //     "code": "string"
-      //   },
-      //   "WhatsApp": {
-      //     "status": "active",
-      //     "message": "string",
-      //     "code": "string"
-      //   },
-      //   "GMB": {
-      //     "status": "active",
-      //     "message": "string",
-      //     "code": "string"
-      //   },
-      //   "FB": {
-      //     "status": "active",
-      //     "message": "string",
-      //     "code": "string"
-      //   }
-      // },
-      // "inboundDndSettings": {
-      //   "all": {
-      //     "status": "active",
-      //     "message": "string"
-      //   }
-      // },
-      // "tags": [
-      //   "nisi sint commodo amet",
-      //   "consequat"
-      // ],
-      // "customFields": [
-      //   {
-      //     "id": "6dvNaf7VhkQ9snc5vnjJ",
-      //     "key": "my_custom_field",
-      //     "field_value": "My Text"
-      //   }
-      // ],
-      // "source": "public api",
-      // "country": "US",
-      // "companyName": "DGS VolMAX",
-      // "assignedTo": "y0BeYjuRIlDwsDcOHOJo"
     };
     const response = await axios
       .post(`${this.baseUrl}/contacts/`, contactData, {
@@ -479,7 +486,10 @@ export class GhlService {
         return res;
       })
       .catch((error) => {
-        console.error('err create contact', error.response.data);
+        this.logger.error(
+          new RequestContext(),
+          `Failed to create contact in GHL: ${JSON.stringify(error.response?.data)}`,
+        );
         throw new Error('Failed to create contact in GHL');
       });
     return response.data.contact;

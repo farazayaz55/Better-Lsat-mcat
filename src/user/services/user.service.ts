@@ -1,6 +1,3 @@
-/* eslint-disable max-statements */
-/* eslint-disable sonarjs/cognitive-complexity */
-/* eslint-disable max-depth */
 import {
   Injectable,
   NotFoundException,
@@ -10,7 +7,7 @@ import { compare, hash } from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
 import { ROLE } from '../../auth/constants/role.constant';
 import { AppLogger } from '../../shared/logger/logger.service';
-import { GoogleCalendarService } from '../../shared/services/google-calendar-api-key.service';
+import { PhoneNormalizerService } from '../../shared/utils/phone-normalizer.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { CreateCustomerInput } from '../dtos/customer-create-input.dto';
 import { UserInput } from '../../order/interfaces/user.interface';
@@ -24,14 +21,13 @@ import { UserAclService } from './user-acl.service';
 import { Action } from '../../shared/acl/action.constant';
 import { IActor } from '../../shared/acl/actor.constant';
 import { OrderRepository } from '../../order/repository/order.repository';
-import { SlotReservationStatus } from '../../order/constants/slot-reservation-status.constant';
 
 @Injectable()
 export class UserService {
   public constructor(
     private readonly repository: UserRepository,
     private readonly logger: AppLogger,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly phoneNormalizer: PhoneNormalizerService,
     private readonly userAclService: UserAclService,
     private readonly orderRepository: OrderRepository,
   ) {
@@ -207,8 +203,9 @@ export class UserService {
     this.logger.log(ctx, `calling ${UserRepository.name}.getById`);
     const user = await this.repository.getById(id);
 
-    //ACL
+    //ACL - Skip ACL check if ctx.user is null (system/webhook context)
     if (
+      ctx.user &&
       !this.userAclService
         .forActor(ctx.user as IActor)
         .canDoAction(Action.READ, user)
@@ -268,8 +265,9 @@ export class UserService {
     this.logger.log(ctx, `calling ${UserRepository.name}.getById`);
     const user = await this.repository.getById(userId);
 
-    //ACL
+    //ACL - Skip ACL check if ctx.user is null (system/webhook context)
     if (
+      ctx.user &&
       !this.userAclService
         .forActor(ctx.user as IActor)
         .canDoAction(Action.UPDATE, user)
@@ -301,80 +299,22 @@ export class UserService {
     ctx?: RequestContext,
   ): Promise<User[]> {
     if (ctx) {
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: findEmployeesByServiceId called for serviceId: ${serviceId}`,
-      );
+      this.logger.log(ctx, `Finding employees for serviceId: ${serviceId}`);
     }
 
-    // Step 3: Check users with USER role and not disabled
-    const activeUsers = await this.repository.find({
-      where: {
-        roles: ROLE.USER,
-        isAccountDisabled: false,
-      },
-    });
+    // Use the optimized repository method
+    const result =
+      await this.repository.findAvailableEmployeesByServiceId(serviceId);
 
     if (ctx) {
       this.logger.log(
         ctx,
-        `🔍 DEBUG: Found ${activeUsers.length} active users with USER role`,
-      );
-      if (activeUsers.length > 0) {
-        this.logger.log(
-          ctx,
-          `🔍 DEBUG: Active users: ${activeUsers.map((u) => `${u.name} (ID: ${u.id}, roles: ${u.roles}, serviceIds: ${u.serviceIds})`).join(', ')}`,
-        );
-      }
-    }
-
-    // Step 4: Test the query parameters
-    const queryParameters = {
-      serviceId: serviceId.toString(),
-      serviceIdStart: `${serviceId},%`,
-      serviceIdEnd: `%,${serviceId}`,
-      serviceIdMiddle: `%,${serviceId},%`,
-    };
-
-    if (ctx) {
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Query parameters: ${JSON.stringify(queryParameters)}`,
-      );
-    }
-
-    // Step 5: Execute the main query
-    const result = await this.repository
-      .createQueryBuilder('user')
-      .where('user.roles LIKE :role', { role: `%${ROLE.USER}%` })
-      .andWhere('user.isAccountDisabled = :isDisabled', { isDisabled: false })
-      .andWhere(
-        '(user.serviceIds = :serviceId OR user.serviceIds LIKE :serviceIdStart OR user.serviceIds LIKE :serviceIdEnd OR user.serviceIds LIKE :serviceIdMiddle)',
-        queryParameters,
-      )
-      .getMany();
-
-    if (ctx) {
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Query result: ${result.length} employees found for service ${serviceId}`,
+        `Found ${result.length} employees for service ${serviceId}`,
       );
       if (result.length > 0) {
         this.logger.log(
           ctx,
-          `🔍 DEBUG: Found employees: ${result.map((u) => `${u.name} (ID: ${u.id}, serviceIds: ${u.serviceIds})`).join(', ')}`,
-        );
-      }
-
-      // Step 6: Manual check for debugging
-      for (const user of activeUsers) {
-        const serviceIdsString = user.serviceIds
-          ? user.serviceIds.toString()
-          : 'null';
-        const hasServiceId = serviceIdsString.includes(serviceId.toString());
-        this.logger.log(
-          ctx,
-          `🔍 DEBUG: User ${user.name} (ID: ${user.id}) - serviceIds: ${serviceIdsString}, has service ${serviceId}: ${hasServiceId}`,
+          `Employees: ${result.map((u) => `${u.name} (ID: ${u.id}, serviceIds: ${u.serviceIds})`).join(', ')}`,
         );
       }
     }
@@ -382,179 +322,34 @@ export class UserService {
     return result;
   }
 
-  public async assignOrderRoundRobin(
+  public async findByPhone(phone: string): Promise<User | null> {
+    if (!phone) {
+      return null;
+    }
+
+    // Use the repository method for phone search
+    const users = await this.repository.findByPhone(phone);
+    return users.length > 0 ? users[0] : null;
+  }
+
+  public async updateAssignmentCount(
     ctx: RequestContext,
-    serviceId: number,
-    itemSlots: string[],
-  ): Promise<User[] | undefined> {
+    userId: number,
+    newCount: number,
+  ): Promise<void> {
     this.logger.log(
       ctx,
-      `🔍 DEBUG: assignOrderRoundRobin called for serviceId: ${serviceId}, itemSlots: ${JSON.stringify(itemSlots)}`,
+      `Updating assignment count for user ${userId} to ${newCount}`,
     );
 
-    const availableEmployees = await this.findEmployeesByServiceId(
-      serviceId,
-      ctx,
-    );
-    this.logger.log(
-      ctx,
-      `🔍 DEBUG: Found ${availableEmployees.length} available employees for service ${serviceId}`,
-    );
-
-    if (availableEmployees.length > 0) {
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Available employees: ${availableEmployees.map((emp) => `${emp.name} (ID: ${emp.id}, count: ${emp.lastAssignedOrderCount})`).join(', ')}`,
-      );
-    }
-
-    if (availableEmployees.length === 0) {
-      this.logger.warn(
-        ctx,
-        `❌ No employees available for service ID: ${serviceId}`,
-      );
-      return undefined;
-    }
-
-    // Find one employee who can handle ALL slots
-    const assignedEmployees: User[] = [];
-    if (itemSlots && itemSlots.length > 0) {
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Looking for one employee who can handle all ${itemSlots.length} slots`,
-      );
-
-      try {
-        // Sort employees by assignment count (round-robin)
-        const sortedEmployees = availableEmployees.sort(
-          (a, b) => a.lastAssignedOrderCount - b.lastAssignedOrderCount,
-        );
-
-        this.logger.log(
-          ctx,
-          `🔍 DEBUG: Sorted employees by assignment count: ${sortedEmployees.map((emp) => `${emp.name} (count: ${emp.lastAssignedOrderCount})`).join(', ')}`,
-        );
-
-        let selectedEmployee: User | undefined;
-
-        // Check each employee to see if they can handle ALL slots
-        for (const employee of sortedEmployees) {
-          this.logger.log(
-            ctx,
-            `🔍 DEBUG: Checking if employee ${employee.name} (ID: ${employee.id}) can handle all slots`,
-          );
-
-          let canHandleAllSlots = true;
-
-          // Check availability for each slot
-          for (const itemSlot of itemSlots) {
-            this.logger.log(
-              ctx,
-              `🔍 DEBUG: Checking employee ${employee.name} availability for slot ${itemSlot}`,
-            );
-
-            // Check Google Calendar availability
-            const availableAtTime =
-              await this.googleCalendarService.getAvailableEmployeesAtTime(
-                itemSlot,
-                [employee], // Check only this employee
-              );
-
-            if (availableAtTime.length === 0) {
-              this.logger.log(
-                ctx,
-                `🔍 DEBUG: Employee ${employee.name} not available in Google Calendar for slot ${itemSlot}`,
-              );
-              canHandleAllSlots = false;
-              break;
-            }
-
-            // Check database availability
-            const isDatabaseAvailable =
-              await this.checkEmployeeDatabaseAvailability(
-                ctx,
-                itemSlot,
-                employee.id,
-              );
-
-            if (!isDatabaseAvailable) {
-              this.logger.log(
-                ctx,
-                `🔍 DEBUG: Employee ${employee.name} not available in database for slot ${itemSlot}`,
-              );
-              canHandleAllSlots = false;
-              break;
-            }
-
-            this.logger.log(
-              ctx,
-              `🔍 DEBUG: Employee ${employee.name} available for slot ${itemSlot}`,
-            );
-          }
-
-          if (canHandleAllSlots) {
-            selectedEmployee = employee;
-            this.logger.log(
-              ctx,
-              `🔍 DEBUG: Employee ${employee.name} (ID: ${employee.id}) can handle all slots!`,
-            );
-            break;
-          }
-        }
-
-        // Update assignment count and assign employee
-        if (selectedEmployee) {
-          await this.repository.update(selectedEmployee.id, {
-            lastAssignedOrderCount: selectedEmployee.lastAssignedOrderCount + 1,
-          });
-
-          this.logger.log(
-            ctx,
-            `✅ Assigned employee ${selectedEmployee.name} (ID: ${selectedEmployee.id}) for all ${itemSlots.length} slots`,
-          );
-
-          assignedEmployees.push(selectedEmployee);
-        } else {
-          this.logger.error(
-            ctx,
-            `❌ No employee found who can handle all ${itemSlots.length} slots`,
-          );
-          return undefined;
-        }
-      } catch (error) {
-        this.logger.error(
-          ctx,
-          `❌ Failed to check Google Calendar availability: ${
-            error instanceof Error ? error.message : 'Unknown error'
-          }`,
-        );
-        this.logger.error(ctx, `❌ Error details: ${JSON.stringify(error)}`);
-        throw new Error(
-          `Failed to check Google Calendar availability: ${
-            error instanceof Error ? error.message : 'Unknown error'
-          }`,
-        );
-        // Fall through to general round-robin
-      }
-    } else {
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: No specific time slots provided, using general round-robin`,
-      );
-    }
+    const user = await this.repository.getById(userId);
+    user.lastAssignedOrderCount = newCount;
+    await this.repository.save(user);
 
     this.logger.log(
       ctx,
-      `🔍 DEBUG: Final assigned employees count: ${assignedEmployees.length}`,
+      `Successfully updated assignment count for user ${userId}`,
     );
-    if (assignedEmployees.length > 0) {
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Final assigned employees: ${assignedEmployees.map((emp) => `${emp.name} (ID: ${emp.id})`).join(', ')}`,
-      );
-    }
-
-    return assignedEmployees;
   }
 
   public async createEmployee(employeeData: Partial<User>): Promise<User> {
@@ -575,8 +370,9 @@ export class UserService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
-    //ACL
+    //ACL - Skip ACL check if ctx.user is null (system/webhook context)
     if (
+      ctx.user &&
       !this.userAclService
         .forActor(ctx.user as IActor)
         .canDoAction(Action.DELETE, user)
@@ -606,100 +402,5 @@ export class UserService {
     // Now delete the user
     await this.repository.delete(id);
     this.logger.log(ctx, `User with id ${id} deleted successfully`);
-  }
-
-  // Add this method to check database reservations for a specific employee and time
-  private async checkEmployeeDatabaseAvailability(
-    ctx: RequestContext,
-    dateTime: string,
-    employeeId: number,
-  ): Promise<boolean> {
-    this.logger.log(
-      ctx,
-      `🔍 DEBUG: checkEmployeeDatabaseAvailability called for employee ${employeeId} at ${dateTime}`,
-    );
-
-    try {
-      // Check for confirmed bookings
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Checking for confirmed bookings for employee ${employeeId} at ${dateTime}`,
-      );
-
-      const confirmedBookings = await this.orderRepository
-        .createQueryBuilder('o')
-        .where('o.slot_reservation_status = :status', {
-          status: SlotReservationStatus.CONFIRMED,
-        })
-        .andWhere(
-          "EXISTS (SELECT 1 FROM json_array_elements(o.items) as item WHERE item->>'DateTime' LIKE :dateTime AND json_array_length(item->'assignedEmployeeIds') > 0 AND EXISTS (SELECT 1 FROM json_array_elements(item->'assignedEmployeeIds') as empId WHERE empId::text = :employeeId))",
-          {
-            dateTime: `%${dateTime}%`,
-            employeeId: employeeId.toString(),
-          },
-        )
-        .getCount();
-
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Found ${confirmedBookings} confirmed bookings for employee ${employeeId} at ${dateTime}`,
-      );
-
-      if (confirmedBookings > 0) {
-        this.logger.log(
-          ctx,
-          `🔍 DEBUG: Employee ${employeeId} NOT available at ${dateTime} - has confirmed bookings`,
-        );
-        return false;
-      }
-
-      // Check for active reservations
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Checking for active reservations for employee ${employeeId} at ${dateTime}`,
-      );
-
-      const activeReservations = await this.orderRepository
-        .createQueryBuilder('o')
-        .where('o.slot_reservation_status = :status', {
-          status: SlotReservationStatus.RESERVED,
-        })
-        .andWhere('o.slot_reservation_expires_at > :now', {
-          now: new Date(),
-        })
-        .andWhere(
-          "EXISTS (SELECT 1 FROM json_array_elements(o.items) as item WHERE item->>'DateTime' LIKE :dateTime AND json_array_length(item->'assignedEmployeeIds') > 0 AND EXISTS (SELECT 1 FROM json_array_elements(item->'assignedEmployeeIds') as empId WHERE empId::text = :employeeId))",
-          {
-            dateTime: `%${dateTime}%`,
-            employeeId: employeeId.toString(),
-          },
-        )
-        .getCount();
-
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Found ${activeReservations} active reservations for employee ${employeeId} at ${dateTime}`,
-      );
-
-      const isAvailable = activeReservations === 0;
-      this.logger.log(
-        ctx,
-        `🔍 DEBUG: Employee ${employeeId} ${isAvailable ? 'IS' : 'NOT'} available at ${dateTime}`,
-      );
-
-      return isAvailable;
-    } catch (error) {
-      this.logger.error(
-        ctx,
-        `❌ Error checking database availability for employee ${employeeId} at ${dateTime}: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`,
-      );
-      this.logger.error(
-        ctx,
-        `❌ Database availability check error details: ${JSON.stringify(error)}`,
-      );
-      return false; // Assume not available if there's an error
-    }
   }
 }

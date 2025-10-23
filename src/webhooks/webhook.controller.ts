@@ -4,15 +4,12 @@
 /* eslint-disable sonarjs/cognitive-complexity */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   Headers,
   HttpCode,
-  HttpException,
   HttpStatus,
-  InternalServerErrorException,
   Post,
   RawBodyRequest,
   Req,
@@ -22,13 +19,8 @@ import { AppLogger } from '../shared/logger/logger.service';
 import { ReqContext } from '../shared/request-context/req-context.decorator';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { StripeService } from '../shared/services/stripe.service';
-import { OrderService } from '../order/services/order.service';
-import { GoogleCalendarService } from '../shared/services/google-calendar-api-key.service';
-import { UserService } from '../user/services/user.service';
-import { PaymentStatus } from '../order/interfaces/stripe-metadata.interface';
-import { SlotReservationStatus } from '../order/constants/slot-reservation-status.constant';
-import { OrderOutput } from '../order/dto/order-output.dto';
-import { Order } from '../order/entities/order.entity';
+import { StripeWebhookHandlerService } from './services/stripe-webhook-handler.service';
+import { WebhookErrorMapperService } from './services/webhook-error-mapper.service';
 
 @ApiTags('webhooks')
 @Controller('webhooks')
@@ -36,9 +28,8 @@ export class WebhookController {
   constructor(
     private readonly logger: AppLogger,
     private readonly stripeService: StripeService,
-    private readonly orderService: OrderService,
-    private readonly googleCalendarService: GoogleCalendarService,
-    private readonly userService: UserService,
+    private readonly stripeWebhookHandler: StripeWebhookHandlerService,
+    private readonly errorMapper: WebhookErrorMapperService,
   ) {
     this.logger.setContext(WebhookController.name);
   }
@@ -104,17 +95,23 @@ export class WebhookController {
       switch (event.type) {
         case 'checkout.session.completed': {
           this.logger.log(ctx, '=== HANDLING CHECKOUT SESSION COMPLETED ===');
-          await this.handleCheckoutSessionCompleted(ctx, event);
+          await this.stripeWebhookHandler.handleCheckoutSessionCompleted(
+            ctx,
+            event,
+          );
           break;
         }
         case 'payment_intent.succeeded': {
           this.logger.log(ctx, '=== HANDLING PAYMENT INTENT SUCCEEDED ===');
-          await this.handlePaymentIntentSucceeded(ctx, event);
+          await this.stripeWebhookHandler.handlePaymentIntentSucceeded(
+            ctx,
+            event,
+          );
           break;
         }
         case 'payment_intent.payment_failed': {
           this.logger.log(ctx, '=== HANDLING PAYMENT INTENT FAILED ===');
-          await this.handlePaymentIntentFailed(ctx, event);
+          await this.stripeWebhookHandler.handlePaymentIntentFailed(ctx, event);
           break;
         }
         default: {
@@ -133,69 +130,8 @@ export class WebhookController {
         ctx,
         `Stack: ${error instanceof Error ? error.stack : 'No stack trace'}`,
       );
-      throw error;
+      throw this.errorMapper.mapWebhookError(error, ctx);
     }
-  }
-
-  private mapWebhookError(error: any, ctx: RequestContext): HttpException {
-    // Log the full error for debugging
-    this.logger.error(ctx, `Webhook Error Details: ${JSON.stringify(error)}`);
-
-    // Map specific error types to appropriate HTTP status codes
-    if (error instanceof Error) {
-      const errorMessage = error.message.toLowerCase();
-
-      // Stripe signature verification errors
-      if (
-        errorMessage.includes('signature') ||
-        errorMessage.includes('webhook')
-      ) {
-        this.logger.warn(ctx, 'Webhook signature verification failed');
-        return new BadRequestException('Invalid webhook signature');
-      }
-
-      // Database/order related errors
-      if (errorMessage.includes('order') || errorMessage.includes('database')) {
-        this.logger.error(
-          ctx,
-          'Database operation failed during webhook processing',
-        );
-        return new InternalServerErrorException(
-          'Failed to process webhook data',
-        );
-      }
-
-      // Payment processing errors
-      if (errorMessage.includes('payment') || errorMessage.includes('stripe')) {
-        this.logger.error(ctx, 'Payment processing error in webhook');
-        return new InternalServerErrorException('Payment processing failed');
-      }
-
-      // Calendar integration errors
-      if (
-        errorMessage.includes('calendar') ||
-        errorMessage.includes('google')
-      ) {
-        this.logger.warn(
-          ctx,
-          'Calendar integration failed, but webhook can continue',
-        );
-        return new InternalServerErrorException('Calendar integration failed');
-      }
-
-      // Validation errors
-      if (
-        errorMessage.includes('validation') ||
-        errorMessage.includes('invalid')
-      ) {
-        this.logger.warn(ctx, 'Webhook data validation failed');
-        return new BadRequestException('Invalid webhook data');
-      }
-    }
-
-    // Default fallback for unknown errors
-    this.logger.error(ctx, 'Unknown webhook error occurred');
-    return new InternalServerErrorException('Webhook processing failed');
   }
 
   @Post()
@@ -266,15 +202,24 @@ export class WebhookController {
 
       switch (testEvent.type) {
         case 'checkout.session.completed': {
-          await this.handleCheckoutSessionCompleted(ctx, testEvent);
+          await this.stripeWebhookHandler.handleCheckoutSessionCompleted(
+            ctx,
+            testEvent,
+          );
           break;
         }
         case 'payment_intent.succeeded': {
-          await this.handlePaymentIntentSucceeded(ctx, testEvent);
+          await this.stripeWebhookHandler.handlePaymentIntentSucceeded(
+            ctx,
+            testEvent,
+          );
           break;
         }
         case 'payment_intent.payment_failed': {
-          await this.handlePaymentIntentFailed(ctx, testEvent);
+          await this.stripeWebhookHandler.handlePaymentIntentFailed(
+            ctx,
+            testEvent,
+          );
           break;
         }
         default: {
@@ -288,376 +233,7 @@ export class WebhookController {
         ctx,
         `Test webhook processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      throw this.mapWebhookError(error, ctx);
-    }
-  }
-
-  // eslint-disable-next-line max-statements
-  public async handleCheckoutSessionCompleted(
-    ctx: RequestContext,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event: any,
-  ): Promise<void> {
-    const session = event.data.object;
-    this.logger.log(ctx, `=== CHECKOUT SESSION COMPLETED ===`);
-    this.logger.log(ctx, `Session ID: ${session.id}`);
-    this.logger.log(ctx, `Session status: ${session.status}`);
-    this.logger.log(ctx, `Session payment status: ${session.payment_status}`);
-    this.logger.log(
-      ctx,
-      `Session metadata: ${JSON.stringify(session.metadata)}`,
-    );
-
-    // Extract order ID from metadata
-    const orderId = session.metadata?.orderId;
-    this.logger.log(ctx, `Extracted order ID from metadata: ${orderId}`);
-    if (orderId) {
-      try {
-        this.logger.log(ctx, `Looking up order with ID: ${orderId}`);
-        const order = await this.orderService.findOne(parseInt(orderId));
-        this.logger.log(ctx, `Found order: ${order ? 'Yes' : 'No'}`);
-        if (order) {
-          this.logger.log(
-            ctx,
-            `Order details: ID=${order.id}, CustomerID=${order.customerId}, Items=${order.items?.length || 0}`,
-          );
-          // Validate slot reservation before confirming payment
-          const reservationValid = await this.validateSlotReservation(
-            ctx,
-            order,
-          );
-          if (!reservationValid) {
-            this.logger.error(
-              ctx,
-              `Order ${orderId} payment succeeded but slot reservation is no longer valid - initiating refund`,
-            );
-            // TODO: Implement refund logic here
-            return;
-          }
-          // Update stripe_meta with completion information
-          order.stripe_meta = {
-            ...order.stripe_meta,
-            checkoutSessionStatus: session.status,
-            paymentStatus: PaymentStatus.SUCCEEDED,
-            paymentCompletedAt: new Date(),
-            lastWebhookEvent: 'checkout.session.completed',
-            lastWebhookProcessedAt: new Date(),
-          };
-
-          await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: SlotReservationStatus.CONFIRMED,
-          });
-
-          this.logger.log(
-            ctx,
-            `Order ${orderId} payment completed via checkout session`,
-          );
-
-          // Create Google Calendar events for non-GHL items after successful payment
-          await this.createGoogleCalendarEvents(ctx, order);
-          this.logger.log(
-            ctx,
-            `=== GOOGLE CALENDAR EVENT CREATION COMPLETED ===`,
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          ctx,
-          `Failed to update order ${orderId} after checkout completion: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-        throw this.mapWebhookError(error, ctx);
-      }
-    }
-  }
-
-  public async handlePaymentIntentSucceeded(
-    ctx: RequestContext,
-    event: any,
-  ): Promise<void> {
-    const paymentIntent = event.data.object;
-    this.logger.log(ctx, `Payment intent succeeded: ${paymentIntent.id}`);
-
-    // Extract order ID from metadata
-    const orderId = paymentIntent.metadata?.orderId;
-    if (orderId) {
-      try {
-        const order = await this.orderService.findOne(parseInt(orderId));
-        if (order) {
-          // Validate slot reservation before confirming payment
-          const reservationValid = await this.validateSlotReservation(
-            ctx,
-            order,
-          );
-          if (!reservationValid) {
-            this.logger.error(
-              ctx,
-              `Order ${orderId} payment succeeded but slot reservation is no longer valid - initiating refund`,
-            );
-            // TODO: Implement refund logic here
-            return;
-          }
-          // Update stripe_meta with payment intent information
-          order.stripe_meta = {
-            ...order.stripe_meta,
-            paymentIntentId: paymentIntent.id,
-            paymentIntentStatus: paymentIntent.status,
-            paymentStatus: PaymentStatus.SUCCEEDED,
-            paymentMethod: paymentIntent.payment_method,
-            paymentCompletedAt: new Date(),
-            lastWebhookEvent: 'payment_intent.succeeded',
-            lastWebhookProcessedAt: new Date(),
-          };
-
-          await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: SlotReservationStatus.CONFIRMED,
-          });
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: SlotReservationStatus.CONFIRMED,
-          });
-
-          this.logger.log(
-            ctx,
-            `Order ${orderId} payment completed via payment intent`,
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          ctx,
-          `Failed to update order ${orderId} after payment intent success: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-        throw this.mapWebhookError(error, ctx);
-      }
-    }
-  }
-
-  public async handlePaymentIntentFailed(
-    ctx: RequestContext,
-    event: any,
-  ): Promise<void> {
-    const paymentIntent = event.data.object;
-    this.logger.log(ctx, `Payment intent failed: ${paymentIntent.id}`);
-
-    // Extract order ID from metadata
-    const orderId = paymentIntent.metadata?.orderId;
-    if (orderId) {
-      try {
-        const order = await this.orderService.findOne(parseInt(orderId));
-        if (order) {
-          // Update stripe_meta with failure information
-          order.stripe_meta = {
-            ...order.stripe_meta,
-            paymentIntentId: paymentIntent.id,
-            paymentIntentStatus: paymentIntent.status,
-            paymentStatus: PaymentStatus.SUCCEEDED,
-            paymentFailedAt: new Date(),
-            lastWebhookEvent: 'payment_intent.payment_failed',
-            lastWebhookProcessedAt: new Date(),
-            webhookErrors: [
-              ...(order.stripe_meta.webhookErrors || []),
-              {
-                eventType: 'payment_intent.payment_failed',
-                error:
-                  paymentIntent.last_payment_error?.message || 'Payment failed',
-                timestamp: new Date(),
-              },
-            ],
-          };
-
-          await this.orderService.updateStripeMeta(order.id, order.stripe_meta);
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: SlotReservationStatus.CONFIRMED,
-          });
-          // Update slot reservation status to CONFIRMED
-          await this.orderService.updateOrder(order.id, {
-            slot_reservation_status: SlotReservationStatus.CONFIRMED,
-          });
-
-          this.logger.log(ctx, `Order ${orderId} payment failed`);
-        }
-      } catch (error) {
-        this.logger.error(
-          ctx,
-          `Failed to update order ${orderId} after payment failure: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-        throw this.mapWebhookError(error, ctx);
-      }
-    }
-  }
-
-  public async createGoogleCalendarEvents(
-    ctx: RequestContext,
-    order: Order,
-  ): Promise<void> {
-    try {
-      this.logger.log(ctx, `=== CREATING GOOGLE CALENDAR EVENTS ===`);
-      this.logger.log(
-        ctx,
-        `Order ID: ${order.id}, Customer ID: ${order.customer.id}`,
-      );
-      this.logger.log(ctx, `Number of items: ${order.items?.length || 0}`);
-
-      // Get customer email
-      this.logger.log(
-        ctx,
-        `Getting customer details for ID: ${order.customer.id}`,
-      );
-      const customer = await this.userService.getUserById(
-        ctx,
-        order.customer.id,
-      );
-      const customerEmail = customer.email;
-      this.logger.log(ctx, `Customer email: ${customerEmail}`);
-
-      // Process each item in the order
-      this.logger.log(ctx, `Processing ${order.items?.length || 0} items...`);
-      for (let i = 0; i < order.items.length; i++) {
-        const item = order.items[i];
-        this.logger.log(ctx, `Processing item: ${item.name} (ID: ${item.id})`);
-
-        // Skip GHL items (ID 8) - they're handled separately
-        if (item.id === 8) {
-          this.logger.log(
-            ctx,
-            `Skipping Google Calendar event for GHL item ${item.name} (ID: ${item.id})`,
-          );
-          continue;
-        }
-
-        // Validate that we have matching DateTime slots and assigned employees
-        if (
-          !item.DateTime ||
-          !item.assignedEmployeeIds ||
-          item.DateTime.length !== item.assignedEmployeeIds.length
-        ) {
-          this.logger.warn(
-            ctx,
-            `Item ${item.name} (ID: ${item.id}) has mismatched DateTime slots (${item.DateTime?.length || 0}) and assigned employees (${item.assignedEmployeeIds?.length || 0})`,
-          );
-          continue;
-        }
-
-        // Create one Google Calendar event per DateTime slot
-        for (let j = 0; j < item.DateTime.length; j++) {
-          const dateTime = item.DateTime[j];
-          const employeeId = item.assignedEmployeeIds[j];
-
-          try {
-            // Get employee email
-            const employee = await this.userService.getUserById(
-              ctx,
-              employeeId,
-            );
-            const employeeEmail = employee.email;
-
-            this.logger.log(
-              ctx,
-              `Creating Google Calendar event for slot ${dateTime} with employee ${employee.name} (${employeeEmail})`,
-            );
-
-            // Create Google Calendar event for this specific slot
-            await this.googleCalendarService.createAppointment(
-              ctx,
-              {
-                ...item,
-                DateTime: [dateTime], // Single slot for this event
-                assignedEmployeeIds: [employeeId], // Single employee for this event
-              },
-              customerEmail,
-              employeeEmail,
-              order.id,
-            );
-
-            this.logger.log(
-              ctx,
-              `Successfully created Google Calendar event for slot ${dateTime}`,
-            );
-          } catch (error) {
-            this.logger.error(
-              ctx,
-              `Failed to create Google Calendar event for slot ${dateTime} with employee ID ${employeeId}: ${
-                error instanceof Error ? error.message : 'Unknown error'
-              }`,
-            );
-          }
-        }
-      }
-
-      this.logger.log(
-        ctx,
-        `Completed Google Calendar events creation for order ${order.id}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        ctx,
-        `Failed to create Google Calendar events for order ${order.id}: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Validates that the slot reservation is still valid before confirming payment
-   * @param ctx Request context
-   * @param order The order to validate
-   * @returns true if reservation is valid, false if expired/invalid
-   */
-  private async validateSlotReservation(
-    ctx: RequestContext,
-    order: any,
-  ): Promise<boolean> {
-    try {
-      this.logger.log(ctx, `Validating slot reservation for order ${order.id}`);
-
-      // Check if order has reservation data
-      if (
-        !order.slot_reservation_expires_at ||
-        !order.slot_reservation_status
-      ) {
-        this.logger.warn(
-          ctx,
-          `Order ${order.id} has no slot reservation data - treating as valid (legacy order)`,
-        );
-        return true; // Legacy orders without reservation data are valid
-      }
-
-      // Check if reservation has expired
-      const now = new Date();
-      if (order.slot_reservation_expires_at < now) {
-        this.logger.error(
-          ctx,
-          `Order ${order.id} slot reservation expired at ${order.slot_reservation_expires_at.toISOString()}`,
-        );
-        return false;
-      }
-
-      // Check if reservation status is still RESERVED
-      if (order.slot_reservation_status !== SlotReservationStatus.RESERVED) {
-        this.logger.error(
-          ctx,
-          `Order ${order.id} slot reservation status is ${order.slot_reservation_status}, expected RESERVED`,
-        );
-        return false;
-      }
-
-      this.logger.log(
-        ctx,
-        `Order ${order.id} slot reservation is valid until ${order.slot_reservation_expires_at.toISOString()}`,
-      );
-      return true;
-    } catch (error) {
-      this.logger.error(
-        ctx,
-        `Error validating slot reservation: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      return false;
+      throw this.errorMapper.mapWebhookError(error, ctx);
     }
   }
 }

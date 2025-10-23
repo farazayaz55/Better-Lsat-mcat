@@ -119,7 +119,8 @@ export class StripeMetadata {
 
   @ApiPropertyOptional({
     description: 'Success redirect URL',
-    example: 'https://example.com/success',
+    example:
+      'https://example.com/payment/success?session_id=cs_123&order_id=456',
     type: 'string',
   })
   successUrl?: string;

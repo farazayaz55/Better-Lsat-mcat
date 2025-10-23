@@ -1,7 +1,7 @@
 import { Expose, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserOutput } from '../../user/dtos/user-output.dto';
-import { SlotReservationStatus } from '../constants/slot-reservation-status.constant';
+import { SlotReservationStatus } from '../../shared/slot/constants/slot-reservation-status.constant';
 import { IsArray, IsNumber } from 'class-validator';
 
 export class Badge {
