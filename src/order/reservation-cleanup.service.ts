@@ -4,7 +4,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AppLogger } from '../shared/logger/logger.service';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { OrderRepository } from './repository/order.repository';
-import { SlotReservationStatus } from './constants/slot-reservation-status.constant';
+import { SlotReservationStatus } from '../shared/slot/constants/slot-reservation-status.constant';
 
 @Injectable()
 export class ReservationCleanupService {
@@ -136,11 +136,11 @@ export class ReservationCleanupService {
   }> {
     try {
       const stats = await this.orderRepository
-        .createQueryBuilder('order')
-        .select('order.slot_reservation_status', 'status')
+        .createQueryBuilder('o')
+        .select('o.slot_reservation_status', 'status')
         .addSelect('COUNT(*)', 'count')
-        .where('order.slot_reservation_status IS NOT NULL')
-        .groupBy('order.slot_reservation_status')
+        .where('o.slot_reservation_status IS NOT NULL')
+        .groupBy('o.slot_reservation_status')
         .getRawMany();
 
       const result = {

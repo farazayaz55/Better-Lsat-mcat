@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtAuthStrategy } from '../auth/strategies/jwt-auth.strategy';
-import { GoogleCalendarModule } from '../shared/google-calendar.module';
+import { GoogleCalendarModule } from '../shared/services/google-calendar/google-calendar.module';
 import { SharedModule } from '../shared/shared.module';
+import { PhoneNormalizerService } from '../shared/utils/phone-normalizer.service';
 import { UserController } from './controllers/user.controller';
 import { User } from './entities/user.entity';
 import { UserRepository } from './repositories/user.repository';
@@ -26,6 +27,7 @@ import { Order } from '../order/entities/order.entity';
     UserRepository,
     OrderRepository,
     GhlService,
+    PhoneNormalizerService,
   ],
   controllers: [UserController],
   exports: [UserService],

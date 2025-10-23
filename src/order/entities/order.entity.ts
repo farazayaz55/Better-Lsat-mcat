@@ -12,7 +12,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { User } from '../../user/entities/user.entity';
 import { Items } from '../interfaces/item.interface';
 import { StripeMetadata } from '../interfaces/stripe-metadata.interface';
-import { SlotReservationStatus } from '../constants/slot-reservation-status.constant';
+import { SlotReservationStatus } from '../../shared/slot/constants/slot-reservation-status.constant';
 
 @Entity('order')
 export class Order {
