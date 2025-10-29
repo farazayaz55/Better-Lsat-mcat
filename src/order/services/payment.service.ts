@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { StripeService } from '../../shared/services/stripe.service';
+import { FeatureFlagService } from '../../shared/services/feature-flag.service';
 import { OrderRepository } from '../repository/order.repository';
 import {
   PaymentStatus,
@@ -21,6 +22,7 @@ export class PaymentService {
     private readonly logger: AppLogger,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
+    private readonly featureFlagService: FeatureFlagService,
   ) {
     this.logger.setContext(PaymentService.name);
   }
@@ -98,7 +100,13 @@ export class PaymentService {
   async createStripeCheckoutSession(
     ctx: RequestContext,
     orderId: number,
+    currency?: string,
   ): Promise<StripeCheckoutSession | undefined> {
+    const shouldEnableTax = this.featureFlagService.isTaxCalculationEnabled();
+    console.log(`🔍 DEBUG: Should enable tax? ${shouldEnableTax}`);
+    console.log(
+      `🔍 DEBUG: STRIPE_TAX_ENABLED env var = ${process.env.STRIPE_TAX_ENABLED}`,
+    );
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
     });
@@ -107,17 +115,42 @@ export class PaymentService {
       return;
     }
 
+    // Use the provided currency parameter (what the user wants to pay in)
+    // Default to CAD if not provided
+    const checkoutCurrency = (currency || 'CAD').toLowerCase();
+
     try {
+      // Always convert from CAD (base currency where prices are stored)
+      // Order prices are always stored in CAD, so we need to convert to checkoutCurrency
+      let exchangeRate = 1;
+      if (checkoutCurrency !== 'cad') {
+        try {
+          // Get exchange rates from CAD to the checkout currency
+          const rates = await this.stripeService.getExchangeRates(ctx, 'CAD');
+          exchangeRate = rates.rates[checkoutCurrency.toUpperCase()] || 1;
+          this.logger.log(
+            ctx,
+            `Converting from CAD to ${checkoutCurrency} with rate ${exchangeRate}`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            ctx,
+            `Failed to fetch exchange rate: ${error instanceof Error ? error.message : 'Unknown error'}. Using 1:1 conversion.`,
+          );
+        }
+      }
+
       // Create checkout session
       const session = await this.stripeService.createCheckoutSession(ctx, {
         customerEmail: order.customer.email,
         lineItems: order.items.map((item) => ({
           price_data: {
-            currency: 'usd',
+            currency: checkoutCurrency,
             product_data: {
               name: item.name,
             },
-            unit_amount: item.price * 100, // Convert to cents
+            // Convert price from CAD to checkout currency, then convert to cents
+            unit_amount: Math.round(item.price * exchangeRate * 100),
           },
           quantity: item.quantity,
         })),
@@ -126,13 +159,18 @@ export class PaymentService {
         metadata: {
           orderId: orderId.toString(),
         },
+        // Enable automatic tax calculation via Stripe Tax if feature flag is enabled
+        automaticTax: this.featureFlagService.isTaxCalculationEnabled(),
       });
+
+      console.log('Taxing', this.featureFlagService.isTaxCalculationEnabled());
 
       // Update order with session ID
       await this.updateStripeMeta(ctx, orderId, {
-        checkoutSessionId: session.url || undefined,
+        checkoutSessionId: session.id || undefined,
         paymentStatus: PaymentStatus.PENDING,
         lastWebhookProcessedAt: new Date(),
+        checkoutSessionUrl: session.url || undefined,
       });
 
       return {

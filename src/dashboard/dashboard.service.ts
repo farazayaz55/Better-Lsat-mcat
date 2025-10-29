@@ -57,10 +57,38 @@ export class DashboardService {
       );
     }
 
+    // Get tax collection data if requested
+    if (query.includeTaxCollection) {
+      data.taxCollection = await this.analyticsService.getTaxCollectionData(
+        ctx,
+        dateRange,
+        query.period,
+      );
+    }
+
+    // Get refund data if requested
+    if (query.includeRefunds) {
+      data.refunds = await this.analyticsService.getRefundData(
+        ctx,
+        dateRange,
+        query.period,
+      );
+    }
+
+    // Ensure we have Date objects for string conversion
+    const startDateObj =
+      dateRange.startDate instanceof Date
+        ? dateRange.startDate
+        : new Date(dateRange.startDate);
+    const endDateObj =
+      dateRange.endDate instanceof Date
+        ? dateRange.endDate
+        : new Date(dateRange.endDate);
+
     const meta: DashboardMetaDto = {
       period: query.period,
-      startDate: dateRange.startDate.toISOString(),
-      endDate: dateRange.endDate.toISOString(),
+      startDate: startDateObj.toISOString(),
+      endDate: endDateObj.toISOString(),
     };
 
     return { data, meta };

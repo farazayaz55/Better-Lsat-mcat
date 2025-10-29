@@ -3,4 +3,5 @@ export enum SlotReservationStatus {
   CONFIRMED = 'CONFIRMED',
   EXPIRED = 'EXPIRED',
   FAILED = 'FAILED',
+  CANCELED = 'CANCELED',
 }

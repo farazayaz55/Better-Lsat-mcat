@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsNotEmpty,ValidateNested } from 'class-validator';
+import { IsArray, IsNotEmpty, IsString, ValidateNested } from 'class-validator';
 
 import { ItemInput, Items } from '../interfaces/item.interface';
 import { UserInput } from '../interfaces/user.interface';
@@ -18,4 +18,9 @@ export class OrderInput {
   @Type(() => UserInput)
   @IsNotEmpty()
   user: UserInput;
+
+  @ApiProperty({ example: 'CAD' })
+  @IsNotEmpty()
+  @IsString()
+  currency: string;
 }

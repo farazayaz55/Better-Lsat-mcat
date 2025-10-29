@@ -77,5 +77,34 @@ export class DashboardQueryDto {
   @Max(100)
   @Transform(({ value }) => parseInt(value, 10))
   topCustomersLimit?: number = 10;
-}
 
+  @ApiPropertyOptional({
+    description: 'Include tax collection metrics',
+    default: true,
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return value;
+  })
+  includeTaxCollection?: boolean = true;
+
+  @ApiPropertyOptional({
+    description: 'Include refund metrics',
+    default: true,
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return value;
+  })
+  includeRefunds?: boolean = true;
+}

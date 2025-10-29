@@ -164,6 +164,7 @@ export class UserService {
     ctx: RequestContext,
     limit: number,
     offset: number,
+    role?: ROLE,
   ): Promise<{ users: UserOutput[]; count: number }> {
     this.logger.log(ctx, `${this.getUsers.name} was called`);
 
@@ -183,6 +184,13 @@ export class UserService {
         '(user.roles LIKE :customerRole OR user.id = :selfId)',
         { customerRole: `%${ROLE.CUSTOMER}%`, selfId: ctx.user?.id },
       );
+    }
+
+    // Filter by role if provided
+    if (role) {
+      queryBuilder.andWhere('user.roles LIKE :role', {
+        role: `%${role}%`,
+      });
     }
 
     const [users, count] = await queryBuilder.getManyAndCount();

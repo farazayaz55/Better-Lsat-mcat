@@ -73,11 +73,32 @@ export class StripeMetadata {
   amountPaid?: number;
 
   @ApiPropertyOptional({
-    description: 'Currency code',
-    example: 'usd',
+    description: 'Tax amount in cents (calculated by Stripe Tax)',
+    example: 400,
+    type: 'number',
+  })
+  taxAmount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Total amount including tax in cents',
+    example: 5400,
+    type: 'number',
+  })
+  totalAmountIncludingTax?: number;
+
+  @ApiPropertyOptional({
+    description: 'Currency code (always CAD in this system)',
+    example: 'cad',
     type: 'string',
   })
   currency?: string;
+
+  @ApiPropertyOptional({
+    description: 'Currency customer actually paid in',
+    example: 'inr',
+    type: 'string',
+  })
+  paidCurrency?: string;
 
   @ApiPropertyOptional({
     description: 'Stripe customer ID',
@@ -116,6 +137,28 @@ export class StripeMetadata {
     format: 'date-time',
   })
   lastWebhookProcessedAt?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Order cancellation timestamp',
+    example: '2024-01-15T14:30:00.000Z',
+    type: 'string',
+    format: 'date-time',
+  })
+  canceledAt?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Reason for order cancellation',
+    example: 'Customer requested refund',
+    type: 'string',
+  })
+  cancelReason?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the refund that caused cancellation',
+    example: 123,
+    type: 'number',
+  })
+  refundId?: number;
 
   @ApiPropertyOptional({
     description: 'Success redirect URL',
