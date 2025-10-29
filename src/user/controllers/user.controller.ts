@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiExtraModels,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -34,17 +35,18 @@ import {
   swaggerBaseApiResponse,
 } from '../../shared/dtos/base-api-response.dto';
 import { BaseUserOutput } from '../../shared/dtos/base-user-output.dto';
-import { PaginationParamsDto as PaginationParametersDto } from '../../shared/dtos/pagination-params.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
 import { ReqContext } from '../../shared/request-context/req-context.decorator';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { GhlService } from '../../shared/services/Ghl.service';
 import { UserOutput } from '../dtos/user-output.dto';
 import { UpdateUserInput } from '../dtos/user-update-input.dto';
+import { GetUsersQueryParams } from '../interfaces/get-users-query.interface';
 import { UserService } from '../services/user.service';
 
 @ApiTags('users')
 @Controller('users')
+@ApiExtraModels(GetUsersQueryParams)
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -129,7 +131,7 @@ export class UserController {
   @ApiBearerAuth()
   async getUsers(
     @ReqContext() ctx: RequestContext,
-    @Query() query: PaginationParametersDto,
+    @Query() query: GetUsersQueryParams,
   ): Promise<BaseApiResponse<UserOutput[]>> {
     this.logger.log(ctx, `${this.getUsers.name} was called`);
 
@@ -137,6 +139,7 @@ export class UserController {
       ctx,
       query.limit,
       query.offset,
+      query.role,
     );
 
     return { data: users, meta: { total: count } };

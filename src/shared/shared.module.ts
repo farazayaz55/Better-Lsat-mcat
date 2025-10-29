@@ -9,6 +9,11 @@ import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { AppLoggerModule } from './logger/logger.module';
 import { EmployeeAvailabilityService } from './slot/services/employee-availability.service';
 import { GoogleCalendarModule } from './services/google-calendar/google-calendar.module';
+import { FeatureFlagService } from './services/feature-flag.service';
+import { FinancialNumberService } from './services/financial-number.service';
+import { StripeService } from './services/stripe.service';
+import { RequestContextFactory } from './services/request-context-factory.service';
+import { QueueModule } from './queue/queue.module';
 
 @Module({
   imports: [
@@ -30,16 +35,35 @@ import { GoogleCalendarModule } from './services/google-calendar/google-calendar
         timezone: 'Z',
         synchronize: false,
         debug: configService.get<string>('env') === 'development',
+        // Add connection retry and timeout settings
+        connectTimeoutMS: 30_000,
+        acquireTimeoutMS: 30_000,
+        timeout: 30_000,
+        retryAttempts: 5,
+        retryDelay: 3000,
+        // Add connection pool settings
+        extra: {
+          max: 20,
+          min: 5,
+          acquire: 30_000,
+          idle: 10_000,
+        },
       }),
     }),
     AppLoggerModule,
     GoogleCalendarModule,
+    QueueModule,
   ],
   exports: [
     AppLoggerModule,
     ConfigModule,
     EmployeeAvailabilityService,
     GoogleCalendarModule,
+    FeatureFlagService,
+    FinancialNumberService,
+    StripeService,
+    RequestContextFactory,
+    QueueModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
@@ -49,6 +73,10 @@ import { GoogleCalendarModule } from './services/google-calendar/google-calendar
       useClass: AllExceptionsFilter,
     },
     EmployeeAvailabilityService,
+    FeatureFlagService,
+    FinancialNumberService,
+    StripeService,
+    RequestContextFactory,
   ],
 })
 export class SharedModule {}

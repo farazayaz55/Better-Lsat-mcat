@@ -114,6 +114,29 @@ export class WebhookController {
           await this.stripeWebhookHandler.handlePaymentIntentFailed(ctx, event);
           break;
         }
+        case 'charge.dispute.created': {
+          this.logger.log(ctx, '=== HANDLING CHARGE DISPUTE CREATED ===');
+          await this.stripeWebhookHandler.handleChargeDisputeCreated(
+            ctx,
+            event,
+          );
+          break;
+        }
+        case 'refund.created': {
+          this.logger.log(ctx, '=== HANDLING REFUND CREATED ===');
+          await this.stripeWebhookHandler.handleRefundCreated(ctx, event);
+          break;
+        }
+        case 'refund.updated': {
+          this.logger.log(ctx, '=== HANDLING REFUND UPDATED ===');
+          await this.stripeWebhookHandler.handleRefundUpdated(ctx, event);
+          break;
+        }
+        case 'charge.refund.updated': {
+          this.logger.log(ctx, '=== HANDLING CHARGE REFUND UPDATED ===');
+          await this.stripeWebhookHandler.handleRefundUpdated(ctx, event);
+          break;
+        }
         default: {
           this.logger.log(ctx, `=== UNHANDLED EVENT TYPE: ${event.type} ===`);
         }

@@ -75,11 +75,17 @@ export interface CalendarEventBase {
 
 export interface AppointmentEvent extends CalendarEventBase {
   conferenceData?: {
-    createRequest: {
+    // Create a new conference
+    createRequest?: {
       requestId: string;
       conferenceSolutionKey: {
         type: 'hangoutsMeet';
       };
+    };
+    // OR reuse an existing conference
+    conferenceId?: string;
+    conferenceSolutionKey?: {
+      type: 'hangoutsMeet';
     };
   };
 }

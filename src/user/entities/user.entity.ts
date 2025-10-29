@@ -68,4 +68,14 @@ export class User {
 
   @OneToMany(() => Task, (task) => task.tutor)
   tasks: Task[];
+
+  // Optional relations for invoicing (lazy-loaded to maintain backward compatibility)
+  @OneToMany('Invoice', 'customer', { lazy: true })
+  invoices: Promise<any[]>;
+
+  @OneToMany('Refund', 'customer', { lazy: true })
+  refunds: Promise<any[]>;
+
+  @OneToMany('PaymentTransaction', 'customer', { lazy: true })
+  transactions: Promise<any[]>;
 }

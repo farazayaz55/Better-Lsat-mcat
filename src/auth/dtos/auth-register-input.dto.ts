@@ -8,6 +8,7 @@ import {
   IsString,
   Length,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 import { ROLE } from '../constants/role.constant';
@@ -31,6 +32,7 @@ export class RegisterInput {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @ValidateIf((o) => o.password && o.password.trim().length > 0)
   @Length(6, 100)
   @IsString()
   password?: string;

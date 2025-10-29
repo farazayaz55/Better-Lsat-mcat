@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GhlService } from '../shared/services/Ghl.service';
 import { StripeService } from '../shared/services/stripe.service';
@@ -8,6 +8,10 @@ import { SharedModule } from '../shared/shared.module';
 import { SlotModule } from '../shared/slot/slot.module';
 import { UserModule } from '../user/user.module';
 import { ProductModule } from '../product/product.module';
+import { FinanceModule } from '../finance/finance.module';
+import { InvoicingModule } from '../invoicing/invoicing.module';
+import { Invoice } from '../invoicing/entities/invoice.entity';
+import { Refund } from '../finance/entities/refund.entity';
 import { Order } from './entities/order.entity';
 import { OrderController } from './order.controller';
 import { OrderService } from './services/order.service';
@@ -21,10 +25,12 @@ import { ReservationCleanupService } from './reservation-cleanup.service';
   imports: [
     SharedModule,
     SlotModule,
-    TypeOrmModule.forFeature([Order]),
+    TypeOrmModule.forFeature([Order, Invoice, Refund]),
     UserModule,
     ProductModule,
     GoogleCalendarModule,
+    forwardRef(() => FinanceModule), // Needed for RefundService in modifyOrder
+    InvoicingModule,
   ],
   controllers: [OrderController],
   providers: [
@@ -40,9 +46,11 @@ import { ReservationCleanupService } from './reservation-cleanup.service';
   ],
   exports: [
     OrderService,
+    OrderRepository,
     PaymentService,
     AnalyticsService,
     ReservationCleanupService,
+    StripeService,
   ],
 })
 export class OrderModule {}
