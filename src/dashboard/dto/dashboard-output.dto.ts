@@ -80,6 +80,86 @@ export class AppointmentsDto {
   periodAppointments: AppointmentPeriodDto[];
 }
 
+export class TaxPeriodDto {
+  @ApiProperty({
+    description: 'Date for this tax period',
+    example: '2024-01-15',
+  })
+  date: string;
+
+  @ApiProperty({
+    description: 'Tax collected in current CAD value',
+    example: 1200.25,
+  })
+  taxCollected: number;
+
+  @ApiProperty({
+    description: 'Tax collected in historical CAD value',
+    example: 1180.0,
+  })
+  taxCollectedHistorical: number;
+}
+
+export class TaxCollectionDto {
+  @ApiProperty({
+    description: 'Total tax collected in current CAD',
+    example: 2500.45,
+  })
+  totalTaxCollected: number;
+
+  @ApiProperty({
+    description: 'Total tax collected in historical CAD',
+    example: 2450.0,
+  })
+  totalTaxHistorical: number;
+
+  @ApiProperty({
+    description: 'Tax collection breakdown by period',
+    type: [TaxPeriodDto],
+  })
+  periodTaxCollection: TaxPeriodDto[];
+}
+
+export class RefundPeriodDto {
+  @ApiProperty({
+    description: 'Date for this refund period',
+    example: '2024-01-15',
+  })
+  date: string;
+
+  @ApiProperty({
+    description: 'Total refunds in CAD',
+    example: 125.0,
+  })
+  refundAmount: number;
+
+  @ApiProperty({
+    description: 'Number of refunds processed',
+    example: 2,
+  })
+  refundCount: number;
+}
+
+export class RefundDto {
+  @ApiProperty({
+    description: 'Total refunds for the period',
+    example: 500.0,
+  })
+  totalRefunds: number;
+
+  @ApiProperty({
+    description: 'Number of refunds processed',
+    example: 3,
+  })
+  totalRefundCount: number;
+
+  @ApiProperty({
+    description: 'Refunds breakdown by period',
+    type: [RefundPeriodDto],
+  })
+  periodRefunds: RefundPeriodDto[];
+}
+
 export class DashboardDataDto {
   @ApiPropertyOptional({
     description: 'Top customers data',
@@ -95,6 +175,18 @@ export class DashboardDataDto {
     type: AppointmentsDto,
   })
   appointments?: AppointmentsDto;
+
+  @ApiPropertyOptional({
+    description: 'Tax collection metrics',
+    type: TaxCollectionDto,
+  })
+  taxCollection?: TaxCollectionDto;
+
+  @ApiPropertyOptional({
+    description: 'Refund metrics',
+    type: RefundDto,
+  })
+  refunds?: RefundDto;
 }
 
 export class DashboardMetaDto {

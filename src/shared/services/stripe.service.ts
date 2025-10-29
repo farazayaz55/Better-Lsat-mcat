@@ -40,6 +40,14 @@ export interface StripeCheckoutSessionData {
   cancelUrl: string;
   expiresAt?: number; // Unix timestamp for session expiration
   metadata?: Record<string, string>;
+  automaticTax?: boolean; // Enable automatic tax calculation via Stripe Tax
+}
+
+export interface StripeRefundData {
+  paymentIntentId: string;
+  amount?: number; // Amount in cents, if not provided, full refund
+  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer';
+  metadata?: Record<string, string>;
 }
 
 @Injectable()
@@ -192,6 +200,16 @@ export class StripeService {
         metadata: sessionData.metadata,
       };
 
+      // Enable automatic tax calculation via Stripe Tax
+      if (sessionData.automaticTax) {
+        sessionConfig.automatic_tax = { enabled: true };
+        sessionConfig.tax_id_collection = { enabled: true };
+        this.logger.log(
+          ctx,
+          'Automatic tax calculation enabled for checkout session',
+        );
+      }
+
       // Add expiration if provided
       if (sessionData.expiresAt) {
         sessionConfig.expires_at = sessionData.expiresAt;
@@ -209,6 +227,24 @@ export class StripeService {
       this.logger.error(
         ctx,
         `Failed to create checkout session: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  async retrieveCheckoutSession(
+    ctx: RequestContext,
+    sessionId: string,
+  ): Promise<Stripe.Checkout.Session> {
+    this.logger.log(ctx, `Retrieving checkout session: ${sessionId}`);
+
+    try {
+      const session = await this.stripe.checkout.sessions.retrieve(sessionId);
+      return session;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to retrieve checkout session: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       throw error;
     }
@@ -311,6 +347,195 @@ export class StripeService {
       this.logger.error(
         ctx,
         `Failed to list customers by email: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Create a refund for a payment intent
+   */
+  async createRefund(
+    ctx: RequestContext,
+    refundData: StripeRefundData,
+  ): Promise<Stripe.Refund> {
+    this.logger.log(
+      ctx,
+      `Creating refund for payment intent: ${refundData.paymentIntentId}`,
+    );
+
+    try {
+      // First, retrieve the payment intent to get the charge ID
+      const paymentIntent = await this.retrievePaymentIntent(
+        ctx,
+        refundData.paymentIntentId,
+      );
+
+      // Get the latest charge from the payment intent
+      const latestCharge = (paymentIntent as any).latest_charge;
+      if (!latestCharge) {
+        throw new Error('No charge found for this payment intent');
+      }
+
+      const refund = await this.stripe.refunds.create({
+        charge: latestCharge as string,
+        amount: refundData.amount,
+        reason: refundData.reason,
+        metadata: refundData.metadata,
+      });
+
+      this.logger.log(ctx, `Refund created with ID: ${refund.id}`);
+      return refund;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to create refund: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve a refund by ID
+   */
+  async retrieveRefund(
+    ctx: RequestContext,
+    refundId: string,
+  ): Promise<Stripe.Refund> {
+    this.logger.log(ctx, `Retrieving refund: ${refundId}`);
+
+    try {
+      const refund = await this.stripe.refunds.retrieve(refundId);
+      return refund;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to retrieve refund: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * List refunds for a payment intent
+   */
+  async listRefunds(
+    ctx: RequestContext,
+    paymentIntentId: string,
+  ): Promise<Stripe.Refund[]> {
+    this.logger.log(
+      ctx,
+      `Listing refunds for payment intent: ${paymentIntentId}`,
+    );
+
+    try {
+      const refunds = await this.stripe.refunds.list({
+        payment_intent: paymentIntentId,
+      });
+      return refunds.data;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to list refunds: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve exchange rates from Stripe
+   * Returns exchange rates with CAD as the base currency
+   * Throws an error if exchange rates cannot be retrieved
+   */
+  async getExchangeRates(
+    ctx: RequestContext,
+    baseCurrency: string = 'CAD',
+  ): Promise<any> {
+    this.logger.log(
+      ctx,
+      `Retrieving exchange rates for base currency: ${baseCurrency}`,
+    );
+
+    try {
+      // Use a public exchange rate API
+      // exchangerate-api.com is free and doesn't require authentication
+      const response = await fetch(
+        `https://api.exchangerate-api.com/v4/latest/${baseCurrency}`,
+      );
+
+      if (!response.ok) {
+        throw new Error(`Exchange rate API returned ${response.status}`);
+      }
+
+      const data: any = await response.json();
+
+      if (!data || !data.rates) {
+        throw new Error('Invalid response from exchange rate API');
+      }
+
+      this.logger.log(
+        ctx,
+        `Successfully retrieved exchange rates for ${baseCurrency}`,
+      );
+
+      return {
+        source: baseCurrency,
+        rates: data.rates,
+        effective_at: data.date
+          ? new Date(data.date).getTime() / 1000
+          : Math.floor(Date.now() / 1000),
+      };
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to retrieve exchange rates: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw new Error(
+        `Exchange rates unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  /**
+   * Get currency conversion for a specific amount
+   */
+  async convertCurrency(
+    ctx: RequestContext,
+    amount: number,
+    fromCurrency: string,
+    toCurrency: string,
+  ): Promise<number> {
+    this.logger.log(
+      ctx,
+      `Converting ${amount} from ${fromCurrency} to ${toCurrency}`,
+    );
+
+    try {
+      // Get the exchange rate first
+      const exchangeRates = await this.getExchangeRates(ctx, fromCurrency);
+
+      if (!exchangeRates || !exchangeRates.rates) {
+        throw new Error('No exchange rates available');
+      }
+
+      const rates = exchangeRates.rates;
+
+      if (!rates[toCurrency]) {
+        throw new Error(`Exchange rate not available for ${toCurrency}`);
+      }
+
+      const convertedAmount = amount * rates[toCurrency];
+
+      this.logger.log(
+        ctx,
+        `Converted ${amount} ${fromCurrency} to ${convertedAmount} ${toCurrency}`,
+      );
+
+      return convertedAmount;
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to convert currency: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       throw error;
     }

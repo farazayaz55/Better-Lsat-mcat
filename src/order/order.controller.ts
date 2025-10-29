@@ -39,6 +39,10 @@ import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
 import { OrderInput } from './dto/order-input.dto';
 import { OrderOutput } from './dto/order-output.dto';
+import {
+  ModifyOrderDto,
+  OrderModificationResultDto,
+} from './dto/modify-order.dto';
 import { GetOrdersQueryParams } from './interfaces/get-orders-query.interface';
 import {
   PaymentStatus,
@@ -84,6 +88,7 @@ export class OrderController {
     const stripeSession = await this.paymentService.createStripeCheckoutSession(
       ctx,
       order.id,
+      createOrderDto.currency,
     );
     return { data: stripeSession, meta: {} };
   }
@@ -154,6 +159,12 @@ export class OrderController {
     const orderOutput = plainToInstance(OrderOutput, order, {
       excludeExtraneousValues: true,
     });
+
+    // Map checkoutSessionUrl from stripe_meta
+    if (order.stripe_meta?.checkoutSessionUrl) {
+      orderOutput.checkoutSessionUrl = order.stripe_meta.checkoutSessionUrl;
+    }
+
     console.log(orderOutput);
     return { data: orderOutput, meta: {} };
   }
@@ -304,6 +315,53 @@ export class OrderController {
     }>
   > {
     const data = await this.reservationCleanupService.getReservationStats(ctx);
+    return { data, meta: {} };
+  }
+
+  @Post('modify')
+  @ApiOperation({
+    summary: 'Modify an existing order',
+    description:
+      'Refunds the original order and creates a new one with different items',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Order successfully modified',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'object',
+          properties: {
+            refund: { type: 'object' },
+            newOrder: { type: 'object' },
+            newInvoice: { type: 'object' },
+          },
+        },
+        meta: { type: 'object' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    type: BaseApiErrorResponse,
+    description: 'Invalid input or order cannot be modified',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    type: BaseApiErrorResponse,
+    description: 'Original order not found',
+  })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  async modifyOrder(
+    @ReqContext() ctx: RequestContext,
+    @Body() modifyOrderDto: ModifyOrderDto,
+  ): Promise<BaseApiResponse<OrderModificationResultDto>> {
+    this.logger.log(ctx, `${this.modifyOrder.name} was called`);
+
+    const data = await this.orderService.modifyOrder(ctx, modifyOrderDto);
     return { data, meta: {} };
   }
 }

@@ -134,4 +134,23 @@ export class OrderOutput {
     nullable: true,
   })
   slot_reservation_status?: SlotReservationStatus;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description:
+      'Google Meet link shared across all calendar events in this order',
+    example: 'https://meet.google.com/abc-defg-hij',
+    type: 'string',
+    nullable: true,
+  })
+  googleMeetLink?: string;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Stripe checkout session URL',
+    example: 'https://checkout.stripe.com/pay/cs_test_123456789',
+    type: 'string',
+    nullable: true,
+  })
+  checkoutSessionUrl?: string;
 }
