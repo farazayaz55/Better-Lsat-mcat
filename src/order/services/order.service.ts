@@ -5,8 +5,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { plainToInstance } from 'class-transformer';
 import { ProductService } from '../../product/services/product.service';
 import { AppLogger } from '../../shared/logger/logger.service';
@@ -32,6 +34,8 @@ import { InvoiceStatus } from '../../invoicing/constants/invoice-status.constant
 import { PaymentStatus } from '../interfaces/stripe-metadata.interface';
 import { RefundReason } from '../../finance/constants/finance.constant';
 import { StripeService } from '../../shared/services/stripe.service';
+import { RefundProcessedEvent } from '../../shared/events/refund-processed.event';
+import { RequestContextFactory } from '../../shared/services/request-context-factory.service';
 import { TriggerEvent } from '../../automation/constants/trigger-events.constant';
 
 @Injectable()
@@ -45,10 +49,12 @@ export class OrderService {
     private readonly productService: ProductService,
     private readonly slotService: SlotService,
     private readonly employeeAssignmentService: EmployeeAssignmentService,
+    @Inject(forwardRef(() => RefundService))
     private readonly refundService: RefundService,
     private readonly invoiceService: InvoiceService,
     private readonly stripeService: StripeService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly contextFactory: RequestContextFactory,
   ) {
     this.logger.setContext(OrderService.name);
   }
@@ -544,5 +550,50 @@ export class OrderService {
       newOrder,
       newInvoice,
     };
+  }
+
+  /**
+   * Event handler for refund processed events
+   * Updates order status and cancels slot reservations when a refund is processed
+   */
+  @OnEvent('refund.processed')
+  async handleRefundProcessed(event: RefundProcessedEvent): Promise<void> {
+    const ctx = this.contextFactory.createSystemContext();
+
+    this.logger.log(
+      ctx,
+      `Handling refund processed event for order ${event.orderId}, refund ${event.refundId}`,
+    );
+
+    try {
+      // Update order status to CANCELED
+      await this.updateOrderStatus(
+        ctx,
+        event.orderId,
+        PaymentStatus.CANCELED,
+        `Refund processed: ${event.reasonDetails || event.reason}`,
+        event.refundId,
+      );
+
+      // Cancel slot reservation
+      await this.cancelSlotReservation(
+        ctx,
+        event.orderId,
+        `Refund processed: ${event.reasonDetails || event.reason}`,
+      );
+
+      this.logger.log(
+        ctx,
+        `Successfully updated order ${event.orderId} after refund ${event.refundId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        ctx,
+        `Failed to handle refund processed event for order ${event.orderId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+      // Don't throw - event handlers should be non-blocking
+    }
   }
 }

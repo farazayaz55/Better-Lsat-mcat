@@ -8,6 +8,7 @@ import { Invoice } from './entities/invoice.entity';
 import { InvoiceRepository } from './repositories/invoice.repository';
 import { InvoiceGeneratorService } from './services/invoice-generator.service';
 import { InvoiceService } from './services/invoice.service';
+import { InvoiceDiscoveryService } from './services/invoice-discovery.service';
 
 @Module({
   imports: [
@@ -16,7 +17,17 @@ import { InvoiceService } from './services/invoice.service';
     TypeOrmModule.forFeature([Invoice]),
   ],
   controllers: [InvoiceController],
-  providers: [InvoiceRepository, InvoiceService, InvoiceGeneratorService],
-  exports: [InvoiceService, InvoiceGeneratorService, InvoiceRepository],
+  providers: [
+    InvoiceRepository,
+    InvoiceService,
+    InvoiceGeneratorService,
+    InvoiceDiscoveryService,
+  ],
+  exports: [
+    InvoiceService,
+    InvoiceGeneratorService,
+    InvoiceRepository,
+    InvoiceDiscoveryService,
+  ],
 })
 export class InvoicingModule {}

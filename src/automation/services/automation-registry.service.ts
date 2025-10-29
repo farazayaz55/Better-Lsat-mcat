@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BaseAutomation } from '../automations/base-automation';
 import { TriggerEvent } from '../constants/trigger-events.constant';
+import { AutomationDiscoveryService } from './automation-discovery.service';
 import { OrderConfirmationAutomation } from '../automations/order-confirmation.automation';
 import { Reminder24hAutomation } from '../automations/reminder-24h.automation';
 import { Reminder30minAutomation } from '../automations/reminder-30min.automation';
@@ -14,26 +15,32 @@ export class AutomationRegistryService {
   private automations = new Map<string, BaseAutomation>();
 
   constructor(
-    private orderConfirmation: OrderConfirmationAutomation,
-    private reminder24h: Reminder24hAutomation,
-    private reminder30min: Reminder30minAutomation,
-    private slackNotification: SlackOrderNotificationAutomation,
-    private orderConfirmationSms: OrderConfirmationSmsAutomation,
-    private reminder24hSms: Reminder24hSmsAutomation,
-    private reminder30minSms: Reminder30minSmsAutomation,
+    orderConfirmation: OrderConfirmationAutomation,
+    reminder24h: Reminder24hAutomation,
+    reminder30min: Reminder30minAutomation,
+    slackNotification: SlackOrderNotificationAutomation,
+    orderConfirmationSms: OrderConfirmationSmsAutomation,
+    reminder24hSms: Reminder24hSmsAutomation,
+    reminder30minSms: Reminder30minSmsAutomation,
   ) {
-    // Auto-register all automations
-    this.register(orderConfirmation);
-    this.register(reminder24h);
-    this.register(reminder30min);
-    this.register(slackNotification);
-    // Register SMS automations
-    this.register(orderConfirmationSms);
-    this.register(reminder24hSms);
-    this.register(reminder30minSms);
+    // Auto-register all automations using discovery service
+    const automations: BaseAutomation[] = [
+      orderConfirmation,
+      reminder24h,
+      reminder30min,
+      slackNotification,
+      orderConfirmationSms,
+      reminder24hSms,
+      reminder30minSms,
+    ];
+
+    AutomationDiscoveryService.registerAutomations(this, automations);
   }
 
-  private register(automation: BaseAutomation): void {
+  /**
+   * Register an automation (called by discovery service)
+   */
+  register(automation: BaseAutomation): void {
     this.automations.set(automation.key, automation);
   }
 
@@ -42,12 +49,12 @@ export class AutomationRegistryService {
   }
 
   getByTriggerEvent(event: TriggerEvent): BaseAutomation[] {
-    return Array.from(this.automations.values()).filter(
+    return [...this.automations.values()].filter(
       (a) => a.triggerEvent === event,
     );
   }
 
   getAll(): BaseAutomation[] {
-    return Array.from(this.automations.values());
+    return [...this.automations.values()];
   }
 }

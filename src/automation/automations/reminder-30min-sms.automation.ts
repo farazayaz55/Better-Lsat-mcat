@@ -11,6 +11,7 @@ export class Reminder30minSmsAutomation extends BaseAutomation {
   readonly description = 'Sends SMS reminder 30 minutes before session';
   readonly triggerEvent = TriggerEvent.ORDER_PAID;
   readonly toolType = ToolType.SMS;
+  readonly schedulingType = 'session-based' as const;
   readonly defaultParameters = {
     delayMinutes: 0, // Will be calculated based on session time
     message:

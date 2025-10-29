@@ -12,6 +12,7 @@ export class OrderConfirmationSmsAutomation extends BaseAutomation {
     'Sends immediate SMS confirmation when payment is received';
   readonly triggerEvent = TriggerEvent.ORDER_PAID;
   readonly toolType = ToolType.SMS;
+  readonly schedulingType = 'fixed-delay' as const;
   readonly defaultParameters = {
     delayMinutes: 0,
     message:

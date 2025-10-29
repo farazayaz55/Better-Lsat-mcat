@@ -77,22 +77,7 @@ export class AutomationConfigController {
 
     const data = automations.map((automation) => {
       const config = configs.find((c) => c.automationKey === automation.key);
-
-      // Merge saved config parameters with default parameters
-      // This ensures any new fields in defaultParameters are included
-      const parameters = config?.parameters
-        ? { ...automation.defaultParameters, ...config.parameters }
-        : automation.defaultParameters;
-
-      return {
-        key: automation.key,
-        name: automation.name,
-        description: automation.description,
-        triggerEvent: automation.triggerEvent,
-        toolType: automation.toolType,
-        isEnabled: config?.isEnabled ?? false,
-        parameters,
-      };
+      return this.configService.buildConfigOutput(automation, config || null);
     });
 
     return { data, meta: { count: data.length } };
@@ -241,21 +226,7 @@ export class AutomationConfigController {
       return { data: null, meta: {} };
     }
 
-    // Merge saved config parameters with default parameters
-    const parameters = config?.parameters
-      ? { ...automation.defaultParameters, ...config.parameters }
-      : automation.defaultParameters;
-
-    const data: AutomationConfigOutputDto = {
-      key: automation.key,
-      name: automation.name,
-      description: automation.description,
-      triggerEvent: automation.triggerEvent,
-      toolType: automation.toolType,
-      isEnabled: config?.isEnabled ?? false,
-      parameters,
-    };
-
+    const data = this.configService.buildConfigOutput(automation, config);
     return { data, meta: {} };
   }
 

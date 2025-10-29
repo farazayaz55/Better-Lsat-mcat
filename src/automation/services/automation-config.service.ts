@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { AutomationConfig } from '../entities/automation-config.entity';
 import { AutomationLog } from '../entities/automation-log.entity';
 import { UpdateAutomationConfigDto } from '../dto/update-automation-config.dto';
+import { BaseAutomation } from '../automations/base-automation';
 
 @Injectable()
 export class AutomationConfigService {
@@ -86,6 +87,41 @@ export class AutomationConfigService {
   async createLog(log: Partial<AutomationLog>): Promise<AutomationLog> {
     const automationLog = this.logRepository.create(log);
     return this.logRepository.save(automationLog);
+  }
+
+  /**
+   * Builds automation configuration output by merging default parameters with saved config
+   * @param automation - The automation instance
+   * @param config - The saved config from database (optional)
+   * @returns Merged parameters with defaults as base
+   */
+  buildConfigOutput(
+    automation: BaseAutomation,
+    config: AutomationConfig | null,
+  ): {
+    key: string;
+    name: string;
+    description: string;
+    triggerEvent: string;
+    toolType: string;
+    isEnabled: boolean;
+    parameters: Record<string, any>;
+  } {
+    // Merge saved config parameters with default parameters
+    // This ensures any new fields in defaultParameters are included
+    const parameters = config?.parameters
+      ? { ...automation.defaultParameters, ...config.parameters }
+      : automation.defaultParameters;
+
+    return {
+      key: automation.key,
+      name: automation.name,
+      description: automation.description,
+      triggerEvent: automation.triggerEvent,
+      toolType: automation.toolType,
+      isEnabled: config?.isEnabled ?? false,
+      parameters,
+    };
   }
 
   /**

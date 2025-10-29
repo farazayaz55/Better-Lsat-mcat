@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Repository, ObjectLiteral } from 'typeorm';
+import { Repository, ObjectLiteral, Between } from 'typeorm';
 import { AppLogger } from '../logger/logger.service';
 import { RequestContext } from '../request-context/request-context.dto';
 
@@ -56,10 +56,7 @@ export abstract class BaseFinancialService<T extends ObjectLiteral> {
     );
     return this.repository.find({
       where: {
-        createdAt: {
-          $gte: startDate,
-          $lte: endDate,
-        },
+        createdAt: Between(startDate, endDate),
       } as any,
     });
   }
@@ -86,10 +83,7 @@ export abstract class BaseFinancialService<T extends ObjectLiteral> {
     );
     return this.repository.count({
       where: {
-        createdAt: {
-          $gte: startDate,
-          $lte: endDate,
-        },
+        createdAt: Between(startDate, endDate),
       } as any,
     });
   }

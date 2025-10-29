@@ -22,6 +22,9 @@ import { Reminder30minSmsAutomation } from './automations/reminder-30min-sms.aut
 import { SharedModule } from '../shared/shared.module';
 import { AutomationProcessor } from './queues/automation.processor';
 import { QueueConfig } from '../shared/queue/queue.config';
+import { FixedDelaySchedulingStrategy } from './services/scheduling/fixed-delay-scheduling.strategy';
+import { SessionBasedSchedulingStrategy } from './services/scheduling/session-based-scheduling.strategy';
+import { SchedulingStrategyFactory } from './services/scheduling/scheduling-strategy-factory';
 
 @Module({
   imports: [
@@ -48,6 +51,10 @@ import { QueueConfig } from '../shared/queue/queue.config';
     AutomationRegistryService,
     ToolRegistryService,
     AutomationExecutorService,
+    // Scheduling Strategies
+    FixedDelaySchedulingStrategy,
+    SessionBasedSchedulingStrategy,
+    SchedulingStrategyFactory,
     // Queue Processor
     AutomationProcessor, // Processor is registered here to access all services
     // Tools

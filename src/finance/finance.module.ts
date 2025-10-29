@@ -13,13 +13,16 @@ import { PaymentTransactionService } from './services/payment-transaction.servic
 import { RefundController } from './controllers/refund.controller';
 import { PaymentTransactionController } from './controllers/payment-transaction.controller';
 import { CurrencyController } from './controllers/currency.controller';
+import { RefundStripeProcessor } from './services/refund-processing/refund-stripe-processor.service';
+import { RefundInvoiceHandler } from './services/refund-processing/refund-invoice-handler.service';
+import { RefundProcessingOrchestrator } from './services/refund-processing/refund-processing-orchestrator.service';
 
 @Module({
   imports: [
     SharedModule,
     TypeOrmModule.forFeature([Refund, PaymentTransaction]),
-    forwardRef(() => OrderModule),
-    forwardRef(() => InvoicingModule),
+    forwardRef(() => OrderModule), // Still needed for OrderService in orchestrator for now
+    InvoicingModule, // Need InvoiceDiscoveryService
   ],
   controllers: [
     RefundController,
@@ -31,6 +34,10 @@ import { CurrencyController } from './controllers/currency.controller';
     PaymentTransactionRepository,
     RefundService,
     PaymentTransactionService,
+    // Refund Processing Services
+    RefundStripeProcessor,
+    RefundInvoiceHandler,
+    RefundProcessingOrchestrator,
   ],
   exports: [
     RefundService,

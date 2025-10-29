@@ -25,7 +25,6 @@ import {
 import { SlotReservationStatus } from '../../shared/slot/constants/slot-reservation-status.constant';
 import { Order } from '../../order/entities/order.entity';
 import { StripeService } from '../../shared/services/stripe.service';
-import { FINANCIAL_CONSTANTS } from '../../shared/constants/financial.constant';
 import { TriggerEvent } from '../../automation/constants/trigger-events.constant';
 
 interface StripeCheckoutSession {

@@ -11,6 +11,7 @@ export class Reminder30minAutomation extends BaseAutomation {
   readonly description = 'Sends reminder email 30 minutes before session';
   readonly triggerEvent = TriggerEvent.ORDER_PAID;
   readonly toolType = ToolType.EMAIL;
+  readonly schedulingType = 'session-based' as const;
   readonly defaultParameters = {
     delayMinutes: 0, // Will be calculated based on session time
     template: 'reminder-30min',

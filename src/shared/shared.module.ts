@@ -12,6 +12,7 @@ import { GoogleCalendarModule } from './services/google-calendar/google-calendar
 import { FeatureFlagService } from './services/feature-flag.service';
 import { FinancialNumberService } from './services/financial-number.service';
 import { StripeService } from './services/stripe.service';
+import { RequestContextFactory } from './services/request-context-factory.service';
 import { QueueModule } from './queue/queue.module';
 
 @Module({
@@ -35,17 +36,17 @@ import { QueueModule } from './queue/queue.module';
         synchronize: false,
         debug: configService.get<string>('env') === 'development',
         // Add connection retry and timeout settings
-        connectTimeoutMS: 30000,
-        acquireTimeoutMS: 30000,
-        timeout: 30000,
+        connectTimeoutMS: 30_000,
+        acquireTimeoutMS: 30_000,
+        timeout: 30_000,
         retryAttempts: 5,
         retryDelay: 3000,
         // Add connection pool settings
         extra: {
           max: 20,
           min: 5,
-          acquire: 30000,
-          idle: 10000,
+          acquire: 30_000,
+          idle: 10_000,
         },
       }),
     }),
@@ -61,6 +62,7 @@ import { QueueModule } from './queue/queue.module';
     FeatureFlagService,
     FinancialNumberService,
     StripeService,
+    RequestContextFactory,
     QueueModule,
   ],
   providers: [
@@ -74,6 +76,7 @@ import { QueueModule } from './queue/queue.module';
     FeatureFlagService,
     FinancialNumberService,
     StripeService,
+    RequestContextFactory,
   ],
 })
 export class SharedModule {}

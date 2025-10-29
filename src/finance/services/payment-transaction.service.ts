@@ -7,25 +7,14 @@ import { PaymentTransaction } from '../entities/payment-transaction.entity';
 import { TransactionType } from '../constants/finance.constant';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
-
-export interface CreatePaymentTransactionDto {
-  orderId: number;
-  customerId: number;
-  type: TransactionType;
-  amount: number;
-  currency?: string;
-  paymentMethod: string;
-  stripePaymentIntentId?: string;
-  stripeChargeId?: string;
-  status: string;
-  metadata?: any;
-  invoiceId?: number;
-}
+import { FinancialNumberService } from '../../shared/services/financial-number.service';
+import { CreatePaymentTransactionDto } from '../dto/payment-transaction.dto';
 
 @Injectable()
 export class PaymentTransactionService {
   constructor(
     private readonly paymentTransactionRepository: PaymentTransactionRepository,
+    private readonly financialNumberService: FinancialNumberService,
     private readonly logger: AppLogger,
   ) {
     this.logger.setContext(PaymentTransactionService.name);
@@ -40,7 +29,8 @@ export class PaymentTransactionService {
       `Creating payment transaction for order ${data.orderId}`,
     );
 
-    const transactionNumber = await this.generateUniqueTransactionNumber();
+    const transactionNumber =
+      await this.financialNumberService.generateTransactionNumber();
 
     const transaction = await this.paymentTransactionRepository.create({
       transactionNumber,
@@ -174,29 +164,5 @@ export class PaymentTransactionService {
       totalRevenue,
       totalRefunds,
     };
-  }
-
-  private async generateUniqueTransactionNumber(): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `TXN-${year}`;
-
-    // Find the highest number for this year
-    const lastTransaction = await this.paymentTransactionRepository
-      .createQueryBuilder('transaction')
-      .where('transaction.transactionNumber LIKE :prefix', {
-        prefix: `${prefix}-%`,
-      })
-      .orderBy('transaction.transactionNumber', 'DESC')
-      .getOne();
-
-    let nextNumber = 1;
-    if (lastTransaction) {
-      const lastNumber = parseInt(
-        lastTransaction.transactionNumber.split('-')[2],
-      );
-      nextNumber = lastNumber + 1;
-    }
-
-    return `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
   }
 }

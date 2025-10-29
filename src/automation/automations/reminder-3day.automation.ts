@@ -11,6 +11,7 @@ export class Reminder3DayAutomation extends BaseAutomation {
   readonly description = 'Sends reminder SMS 3 days after order is paid';
   readonly triggerEvent = TriggerEvent.ORDER_PAID;
   readonly toolType = ToolType.SMS;
+  readonly schedulingType = 'fixed-delay' as const;
   readonly defaultParameters = {
     delayMinutes: 4320, // 3 days
     message:

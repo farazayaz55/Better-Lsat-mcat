@@ -18,33 +18,15 @@ import { Refund } from '../entities/refund.entity';
 import { RefundStatus, RefundReason } from '../constants/finance.constant';
 import { RequestContext } from '../../shared/request-context/request-context.dto';
 import { AppLogger } from '../../shared/logger/logger.service';
-import { StripeService } from '../../shared/services/stripe.service';
 import { OrderService } from '../../order/services/order.service';
-import { PaymentService } from '../../order/services/payment.service';
-import { InvoiceService } from '../../invoicing/services/invoice.service';
 import { FINANCIAL_CONSTANTS } from '../../shared/constants/financial.constant';
-import { PaymentStatus } from '../../order/interfaces/stripe-metadata.interface';
-import { PaymentTransactionService } from './payment-transaction.service';
-import { TransactionType } from '../constants/finance.constant';
-
-export interface CreateRefundDto {
-  originalOrderId: number;
-  customerId: number;
-  amount: number;
-  currency?: string;
-  reason: RefundReason;
-  reasonDetails: string;
-  newOrderId?: number;
-  invoiceId?: number; // Make optional - will be auto-discovered
-}
-
-export interface ProcessRefundDto {
-  stripeRefundId?: string;
-}
-
-export interface CancelRefundDto {
-  reason: string;
-}
+import { InvoiceDiscoveryService } from '../../invoicing/services/invoice-discovery.service';
+import {
+  CreateRefundDto,
+  ProcessRefundDto,
+  CancelRefundDto,
+} from '../dto/refund.dto';
+import { RefundProcessingOrchestrator } from './refund-processing/refund-processing-orchestrator.service';
 
 @Injectable()
 export class RefundService extends BaseFinancialService<Refund> {
@@ -52,18 +34,25 @@ export class RefundService extends BaseFinancialService<Refund> {
     @InjectRepository(Refund)
     protected readonly repository: Repository<Refund>,
     private readonly refundRepository: RefundRepository,
-    private readonly stripeService: StripeService,
     @Inject(forwardRef(() => OrderService))
     private readonly orderService: OrderService,
-    @Inject(forwardRef(() => PaymentService))
-    private readonly paymentService: PaymentService,
-    private readonly invoiceService: InvoiceService,
+    private readonly invoiceDiscoveryService: InvoiceDiscoveryService,
     private readonly configService: ConfigService,
     private readonly financialNumberService: FinancialNumberService,
-    private readonly paymentTransactionService: PaymentTransactionService,
+    private readonly refundOrchestrator: RefundProcessingOrchestrator,
     protected readonly logger: AppLogger,
   ) {
     super(repository, logger);
+  }
+
+  /**
+   * Finds the invoice for an order
+   */
+  private async findInvoiceForOrder(
+    ctx: RequestContext,
+    orderId: number,
+  ): Promise<{ id: number } | null> {
+    return this.invoiceDiscoveryService.findInvoiceForOrder(ctx, orderId);
   }
 
   /**
@@ -79,7 +68,7 @@ export class RefundService extends BaseFinancialService<Refund> {
     );
 
     // Auto-discover the invoice ID from the order
-    const invoice = await this.getInvoiceByOrderId(ctx, data.originalOrderId);
+    const invoice = await this.findInvoiceForOrder(ctx, data.originalOrderId);
     if (!invoice) {
       throw new Error(`No invoice found for order ${data.originalOrderId}`);
     }
@@ -118,16 +107,13 @@ export class RefundService extends BaseFinancialService<Refund> {
     // Automatically find the invoice for the order if not provided
     let invoiceId = data.invoiceId;
     if (!invoiceId) {
-      const invoices = await this.invoiceService.getInvoicesByOrderId(
-        ctx,
-        data.originalOrderId,
-      );
-      if (invoices.length === 0) {
+      const invoice = await this.findInvoiceForOrder(ctx, data.originalOrderId);
+      if (!invoice) {
         throw new NotFoundException(
           `No invoice found for order ${data.originalOrderId}`,
         );
       }
-      invoiceId = invoices[0].id;
+      invoiceId = invoice.id;
       this.logger.log(
         ctx,
         `Auto-found invoice ${invoiceId} for order ${data.originalOrderId}`,
@@ -267,18 +253,6 @@ export class RefundService extends BaseFinancialService<Refund> {
     return updatedRefund;
   }
 
-  private async getInvoiceByOrderId(
-    ctx: RequestContext,
-    orderId: number,
-  ): Promise<any> {
-    this.logger.log(ctx, `Getting invoice for order ${orderId}`);
-    const invoices = await this.invoiceService.getInvoicesByOrderId(
-      ctx,
-      orderId,
-    );
-    return invoices.length > 0 ? invoices[0] : null;
-  }
-
   async getRefundsByOriginalOrderId(
     ctx: RequestContext,
     originalOrderId: number,
@@ -315,247 +289,7 @@ export class RefundService extends BaseFinancialService<Refund> {
     processData: ProcessRefundDto,
   ): Promise<Refund> {
     this.logger.log(ctx, `Processing refund ${refundId}`);
-
-    const refund = await this.refundRepository.findById(refundId);
-    if (!refund) {
-      throw new NotFoundException(`Refund with ID ${refundId} not found`);
-    }
-
-    if (refund.status !== RefundStatus.PENDING) {
-      throw new RefundProcessingError(
-        `Refund ${refundId} is not in pending status`,
-        refundId,
-      );
-    }
-
-    try {
-      // Update status to processing
-      await this.refundRepository.update(refundId, {
-        status: RefundStatus.PROCESSING,
-      });
-
-      // Get the original order to find the payment intent
-      const order = await this.orderService.findOne(refund.originalOrderId);
-      if (!order) {
-        throw new NotFoundException(
-          `Order ${refund.originalOrderId} not found`,
-        );
-      }
-
-      // Extract payment intent ID from order's stripe metadata
-      let paymentIntentId = order.stripe_meta?.paymentIntentId;
-
-      // If no payment intent ID, try to get it from checkout session
-      if (!paymentIntentId && order.stripe_meta?.checkoutSessionId) {
-        try {
-          this.logger.log(
-            ctx,
-            `No payment intent ID found, retrieving from checkout session: ${order.stripe_meta.checkoutSessionId}`,
-          );
-
-          // Retrieve the checkout session to get the payment intent
-          const session = await this.stripeService.retrieveCheckoutSession(
-            ctx,
-            order.stripe_meta.checkoutSessionId,
-          );
-
-          if (session.payment_intent) {
-            paymentIntentId =
-              typeof session.payment_intent === 'string'
-                ? session.payment_intent
-                : session.payment_intent.id;
-
-            this.logger.log(
-              ctx,
-              `Found payment intent ${paymentIntentId} from checkout session`,
-            );
-
-            // Update the order's stripe_meta with the payment intent ID for future use
-            await this.paymentService.updateStripeMeta(
-              ctx,
-              refund.originalOrderId,
-              {
-                ...order.stripe_meta,
-                paymentIntentId,
-              },
-            );
-          }
-        } catch (error) {
-          this.logger.error(
-            ctx,
-            `Failed to retrieve payment intent from checkout session: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          );
-        }
-      }
-
-      if (!paymentIntentId) {
-        this.logger.error(
-          ctx,
-          `Order ${refund.originalOrderId} stripe_meta: ${JSON.stringify(order.stripe_meta)}`,
-        );
-        throw new Error(
-          `No payment intent found for order ${refund.originalOrderId}. ` +
-            `This order may have been created before payment processing was implemented, ` +
-            `or the payment intent creation failed. ` +
-            `Available stripe_meta fields: ${order.stripe_meta ? Object.keys(order.stripe_meta).join(', ') : 'none'}`,
-        );
-      }
-
-      // Map refund reason to Stripe reason
-      const stripeReason = this.mapRefundReasonToStripe(refund.reason);
-
-      // Get the original payment currency from order metadata
-      const originalPaymentCurrency =
-        order.stripe_meta?.paidCurrency?.toUpperCase() ||
-        order.stripe_meta?.currency?.toUpperCase() ||
-        'CAD';
-
-      this.logger.log(
-        ctx,
-        `Refund amount in CAD: ${refund.amount}, Original payment currency: ${originalPaymentCurrency}`,
-      );
-
-      // Convert refund amount from CAD to original payment currency if needed
-      let refundAmountForStripe = Math.round(refund.amount);
-
-      if (originalPaymentCurrency !== 'CAD') {
-        try {
-          // Get exchange rates from CAD to original payment currency
-          const rates = await this.stripeService.getExchangeRates(ctx, 'CAD');
-          const conversionRate = rates.rates[originalPaymentCurrency];
-
-          if (conversionRate) {
-            refundAmountForStripe = Math.round(refund.amount * conversionRate);
-            this.logger.log(
-              ctx,
-              `Converted refund amount from CAD to ${originalPaymentCurrency}: ${refund.amount} CAD * ${conversionRate} = ${refundAmountForStripe} ${originalPaymentCurrency}`,
-            );
-          } else {
-            this.logger.warn(
-              ctx,
-              `Could not find exchange rate for ${originalPaymentCurrency}, using CAD amount as-is`,
-            );
-          }
-        } catch (error) {
-          this.logger.warn(
-            ctx,
-            `Failed to convert refund amount: ${error instanceof Error ? error.message : 'Unknown error'}, using CAD amount as-is`,
-          );
-        }
-      }
-
-      // Create refund in Stripe with converted amount
-      const stripeRefund = await this.stripeService.createRefund(ctx, {
-        paymentIntentId,
-        amount: refundAmountForStripe, // Amount in original payment currency
-        reason: stripeReason,
-        metadata: {
-          refundId: refund.id.toString(),
-          refundNumber: refund.refundNumber,
-          originalOrderId: refund.originalOrderId.toString(),
-          customerId: refund.customerId.toString(),
-          refundAmountInCad: refund.amount.toString(), // Store original CAD amount for reference
-          refundAmountInPaymentCurrency: refundAmountForStripe.toString(),
-          originalPaymentCurrency,
-        },
-      });
-
-      // ✅ ADD THIS: Void the invoice automatically
-      await this.invoiceService.voidInvoice(
-        ctx,
-        refund.invoiceId,
-        `Refund processed: ${refund.reasonDetails}`,
-      );
-
-      // ✅ ADD THIS: Update original order status to CANCELED
-      await this.orderService.updateOrderStatus(
-        ctx,
-        refund.originalOrderId,
-        PaymentStatus.CANCELED,
-        `Refund processed: ${refund.reasonDetails}`,
-        refund.id,
-      );
-
-      // ✅ ADD THIS: Cancel slot reservation
-      await this.orderService.cancelSlotReservation(
-        ctx,
-        refund.originalOrderId,
-        `Refund processed: ${refund.reasonDetails}`,
-      );
-
-      // Update refund with Stripe refund ID and completed status
-      await this.refundRepository.update(refundId, {
-        status: RefundStatus.COMPLETED,
-        stripeRefundId: stripeRefund.id,
-        refundedAt: new Date(),
-        processedBy: ctx.user?.id, // Track who processed the refund
-        metadata: {
-          refundAmountInCad: refund.amount,
-          refundAmountInPaymentCurrency: refundAmountForStripe,
-          originalPaymentCurrency,
-        },
-      });
-
-      const updatedRefund = await this.refundRepository.findById(refundId);
-      if (!updatedRefund) {
-        throw new Error(`Failed to retrieve updated refund ${refundId}`);
-      }
-
-      // ✅ Create payment transaction for the refund
-      try {
-        await this.paymentTransactionService.createPaymentTransaction(ctx, {
-          orderId: refund.originalOrderId,
-          customerId: refund.customerId,
-          type: TransactionType.REFUND,
-          amount: refund.amount,
-          currency: refund.currency,
-          paymentMethod: 'card', // Default for Stripe refunds
-          stripePaymentIntentId: order.stripe_meta?.paymentIntentId,
-          stripeChargeId: stripeRefund.id,
-          status: 'succeeded',
-          invoiceId: refund.invoiceId,
-          metadata: {
-            refundId: updatedRefund.id.toString(),
-            refundNumber: updatedRefund.refundNumber,
-            stripeRefundId: stripeRefund.id,
-            reason: refund.reason,
-            reasonDetails: refund.reasonDetails,
-          },
-        });
-
-        this.logger.log(
-          ctx,
-          `Created payment transaction for refund ${refundId}`,
-        );
-      } catch (transactionError) {
-        this.logger.error(
-          ctx,
-          `Failed to create payment transaction for refund ${refundId}: ${
-            transactionError instanceof Error
-              ? transactionError.message
-              : 'Unknown error'
-          }`,
-        );
-        // Don't throw - we don't want to fail the refund if transaction creation fails
-      }
-
-      this.logger.log(
-        ctx,
-        `Successfully processed refund ${refundId} with Stripe refund ID: ${stripeRefund.id}`,
-      );
-      return updatedRefund;
-    } catch (error) {
-      // Update refund status to failed
-      await this.refundRepository.update(refundId, {
-        status: RefundStatus.FAILED,
-      });
-
-      this.logger.error(
-        ctx,
-        `Failed to process refund ${refundId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      throw error;
-    }
+    return this.refundOrchestrator.processRefund(ctx, refundId, processData);
   }
 
   async cancelRefund(
@@ -630,20 +364,5 @@ export class RefundService extends BaseFinancialService<Refund> {
       byReason,
       recentCount,
     };
-  }
-
-  private mapRefundReasonToStripe(
-    reason: RefundReason,
-  ): 'duplicate' | 'fraudulent' | 'requested_by_customer' {
-    switch (reason) {
-      case RefundReason.DUPLICATE:
-        return 'duplicate';
-      case RefundReason.FRAUDULENT:
-        return 'fraudulent';
-      case RefundReason.CUSTOMER_REQUEST:
-        return 'requested_by_customer';
-      default:
-        return 'requested_by_customer';
-    }
   }
 }

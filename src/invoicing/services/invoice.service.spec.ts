@@ -1,10 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConfigService } from '@nestjs/config';
 
 import { InvoiceService } from '../services/invoice.service';
 import { InvoiceRepository } from '../repositories/invoice.repository';
-import { InvoiceNumberService } from '../services/invoice-number.service';
+import { FinancialNumberService } from '../../shared/services/financial-number.service';
 import { Invoice } from '../entities/invoice.entity';
 
 describe('InvoiceService', () => {
@@ -32,16 +31,12 @@ describe('InvoiceService', () => {
           useValue: mockRepository,
         },
         {
-          provide: InvoiceNumberService,
+          provide: FinancialNumberService,
           useValue: {
             generateInvoiceNumber: jest
               .fn()
               .mockResolvedValue('INV-20250115-0001'),
           },
-        },
-        {
-          provide: ConfigService,
-          useValue: mockConfigService,
         },
       ],
     }).compile();
@@ -83,4 +78,3 @@ describe('InvoiceService', () => {
     );
   });
 });
-

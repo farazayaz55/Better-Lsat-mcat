@@ -12,6 +12,7 @@ export class Reminder24hSmsAutomation extends BaseAutomation {
     'Sends SMS reminder 24 hours before session with session details';
   readonly triggerEvent = TriggerEvent.ORDER_PAID;
   readonly toolType = ToolType.SMS;
+  readonly schedulingType = 'session-based' as const;
   readonly defaultParameters = {
     delayMinutes: 0, // Will be calculated based on session time (24h before)
     message:

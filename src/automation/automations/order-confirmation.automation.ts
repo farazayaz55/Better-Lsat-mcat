@@ -12,6 +12,7 @@ export class OrderConfirmationAutomation extends BaseAutomation {
     'Sends immediate confirmation email when payment is received';
   readonly triggerEvent = TriggerEvent.ORDER_PAID;
   readonly toolType = ToolType.EMAIL;
+  readonly schedulingType = 'fixed-delay' as const;
   readonly defaultParameters = {
     delayMinutes: 0,
     ccRecipients: [],

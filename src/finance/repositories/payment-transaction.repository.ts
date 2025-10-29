@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
+import { BaseFinancialRepository } from '../../shared/repositories/base-financial.repository';
 import { PaymentTransaction } from '../entities/payment-transaction.entity';
 import { TransactionType } from '../constants/finance.constant';
 
@@ -23,11 +24,13 @@ export interface PaymentTransactionFilter {
 }
 
 @Injectable()
-export class PaymentTransactionRepository {
+export class PaymentTransactionRepository extends BaseFinancialRepository<PaymentTransaction> {
   constructor(
     @InjectRepository(PaymentTransaction)
-    private readonly repository: Repository<PaymentTransaction>,
-  ) {}
+    protected readonly repository: Repository<PaymentTransaction>,
+  ) {
+    super(repository);
+  }
 
   async create(data: Partial<PaymentTransaction>): Promise<PaymentTransaction> {
     const transaction = this.repository.create(data);
@@ -44,13 +47,7 @@ export class PaymentTransactionRepository {
     return this.repository.findOne({ where: { transactionNumber } });
   }
 
-  async findByOrderId(orderId: number): Promise<PaymentTransaction[]> {
-    return this.repository.find({ where: { orderId } });
-  }
-
-  async findByCustomerId(customerId: number): Promise<PaymentTransaction[]> {
-    return this.repository.find({ where: { customerId } });
-  }
+  // findByOrderId and findByCustomerId are inherited from BaseFinancialRepository
 
   async findByStripePaymentIntentId(
     stripePaymentIntentId: string,
@@ -166,43 +163,14 @@ export class PaymentTransactionRepository {
     return this.repository.count({ where: { type } });
   }
 
-  async countByStatus(status: string): Promise<number> {
-    return this.repository.count({ where: { status } });
-  }
-
-  async countByDateRange(startDate: Date, endDate: Date): Promise<number> {
-    return this.repository.count({
-      where: {
-        createdAt: Between(startDate, endDate),
-      },
-    });
-  }
+  // countByStatus and countByDateRange are inherited from BaseFinancialRepository
 
   async getTotalAmountByType(
     type: TransactionType,
     startDate?: Date,
     endDate?: Date,
   ): Promise<number> {
-    const queryBuilder = this.repository
-      .createQueryBuilder('transaction')
-      .select('SUM(transaction.amount)', 'total')
-      .where('transaction.type = :type', { type });
-
-    if (startDate && endDate) {
-      queryBuilder.andWhere(
-        'transaction.createdAt BETWEEN :startDate AND :endDate',
-        {
-          startDate,
-          endDate,
-        },
-      );
-    }
-
-    const result = await queryBuilder.getRawOne();
-    return parseInt(result.total) || 0;
-  }
-
-  createQueryBuilder(alias: string) {
-    return this.repository.createQueryBuilder(alias);
+    // Use inherited method from BaseFinancialRepository
+    return super.getTotalAmountByType(type as string, startDate, endDate);
   }
 }

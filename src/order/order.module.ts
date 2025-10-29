@@ -29,7 +29,7 @@ import { ReservationCleanupService } from './reservation-cleanup.service';
     UserModule,
     ProductModule,
     GoogleCalendarModule,
-    forwardRef(() => FinanceModule),
+    forwardRef(() => FinanceModule), // Needed for RefundService in modifyOrder
     InvoicingModule,
   ],
   controllers: [OrderController],

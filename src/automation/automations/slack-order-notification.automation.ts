@@ -11,6 +11,7 @@ export class SlackOrderNotificationAutomation extends BaseAutomation {
   readonly description = 'Sends Slack notification when payment is received';
   readonly triggerEvent = TriggerEvent.ORDER_PAID;
   readonly toolType = ToolType.SLACK;
+  readonly schedulingType = 'fixed-delay' as const;
   readonly defaultParameters = {
     delayMinutes: 0,
     channel: '#orders',
@@ -48,11 +49,11 @@ export class SlackOrderNotificationAutomation extends BaseAutomation {
     };
 
     // Use custom message if provided, otherwise use default
-    let message = this.replacePlaceholders(
+    const message = this.replacePlaceholders(
       parameters.customMessage || this.defaultParameters.customMessage,
       placeholderValues,
     );
-    let blockText = this.replacePlaceholders(
+    const blockText = this.replacePlaceholders(
       parameters.customBlockMessage ||
         this.defaultParameters.customBlockMessage,
       placeholderValues,
