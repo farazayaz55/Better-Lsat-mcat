@@ -19,6 +19,10 @@ import { SlackOrderNotificationAutomation } from './automations/slack-order-noti
 import { OrderConfirmationSmsAutomation } from './automations/order-confirmation-sms.automation';
 import { Reminder24hSmsAutomation } from './automations/reminder-24h-sms.automation';
 import { Reminder30minSmsAutomation } from './automations/reminder-30min-sms.automation';
+import { NoShowSmsAutomation } from './automations/no-show-sms.automation';
+import { NoShowEmailAutomation } from './automations/no-show-email.automation';
+import { OrderCompletedService5SmsAutomation } from './automations/order-completed-service5-sms.automation';
+import { OrderCompletedDefaultSmsAutomation } from './automations/order-completed-default-sms.automation';
 import { SharedModule } from '../shared/shared.module';
 import { AutomationProcessor } from './queues/automation.processor';
 import { QueueConfig } from '../shared/queue/queue.config';
@@ -63,6 +67,10 @@ import { QueueConfig } from '../shared/queue/queue.config';
     OrderConfirmationSmsAutomation,
     Reminder24hSmsAutomation,
     Reminder30minSmsAutomation,
+    NoShowSmsAutomation,
+    NoShowEmailAutomation,
+    OrderCompletedService5SmsAutomation,
+    OrderCompletedDefaultSmsAutomation,
   ],
   controllers: [AutomationConfigController],
   exports: [

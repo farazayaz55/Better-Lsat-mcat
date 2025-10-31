@@ -52,6 +52,7 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      RESCHEDULE_BASE_URL: ${RESCHEDULE_BASE_URL}
       REDIS_HOST: redis
       REDIS_PORT: 6379
     depends_on:
@@ -72,7 +73,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
 

@@ -3,6 +3,11 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserOutput } from '../../user/dtos/user-output.dto';
 import { SlotReservationStatus } from '../../shared/slot/constants/slot-reservation-status.constant';
 import { IsArray, IsNumber } from 'class-validator';
+import {
+  OrderAppointmentAttendanceStatus,
+  OrderTag,
+} from '../entities/order-appointment.entity';
+import { OrderStatus } from '../entities/order.entity';
 
 export class Badge {
   @Expose()
@@ -69,28 +74,10 @@ export class ItemOutput {
   Description: string;
 
   @Expose()
-  @ApiProperty({
-    description: 'Scheduled date and time',
-    example: ['2025-10-15T12:00:00Z'],
-    type: [String],
-  })
-  DateTime: string[];
-
-  @Expose()
   @ApiProperty({ description: 'Quantity', example: 1 })
   quantity: number;
 
-  @Expose()
-  @ApiProperty({
-    description: 'Assigned employee IDs',
-    example: [5, 6],
-    type: Array,
-    items: { type: 'number' },
-  })
-  @IsArray()
-  @IsNumber({}, { each: true })
-  @Type(() => Number)
-  assignedEmployeeIds: number[];
+  // Scheduling fields removed from output to avoid drift; use appointments APIs instead
 }
 
 export class OrderOutput {
@@ -153,4 +140,73 @@ export class OrderOutput {
     nullable: true,
   })
   checkoutSessionUrl?: string;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Free-form notes about the order',
+    type: String,
+    nullable: true,
+  })
+  notes?: string | null;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Derived tags summarizing appointment attendance',
+    isArray: true,
+    enum: OrderTag,
+  })
+  tags?: OrderTag[] | null;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Business status of the order',
+    enum: OrderStatus,
+  })
+  orderStatus?: OrderStatus;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Timestamp when order was marked as completed',
+    type: 'string',
+    format: 'date-time',
+    nullable: true,
+  })
+  completedAt?: Date | null;
+}
+
+export class OrderAppointmentOutput {
+  @Expose()
+  @ApiProperty({ description: 'Appointment ID' })
+  id: number;
+
+  @Expose()
+  @ApiProperty({ description: 'Order ID' })
+  orderId: number;
+
+  @Expose()
+  @ApiProperty({ description: 'Item/Product ID' })
+  itemId: number;
+
+  @Expose()
+  @ApiProperty({
+    description: 'Slot datetime (ISO)',
+    type: String,
+    format: 'date-time',
+  })
+  slotDateTime: Date;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Assigned employee ID',
+    type: Number,
+    nullable: true,
+  })
+  assignedEmployeeId?: number | null;
+
+  @Expose()
+  @ApiProperty({
+    description: 'Attendance status',
+    enum: OrderAppointmentAttendanceStatus,
+  })
+  attendanceStatus: OrderAppointmentAttendanceStatus;
 }

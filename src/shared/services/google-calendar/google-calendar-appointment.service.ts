@@ -82,7 +82,7 @@ export class GoogleCalendarAppointmentService {
       // Build event using helper methods
       const eventBase = this.eventBuilder.buildEventBase(
         `${item.name} - Appointment`,
-        `${item.Description || `Service: ${item.name}`}\n\nThis appointment has been scheduled by Better LSAT MCAT.\n\nOrder Item ID: ${item.id}\nQuantity: ${item.quantity}\nPrice: $${item.price}`,
+        `${item.Description || `Service: ${item.name}`}\n\nThis appointment has been scheduled by Better LSAT MCAT.\n\nOrder ID: ${orderId ?? 'N/A'}\nOrder Item ID: ${item.id}\nQuantity: ${item.quantity}\nPrice: $${item.price}`,
         startTime,
         endTime,
       );
@@ -225,65 +225,94 @@ export class GoogleCalendarAppointmentService {
       let sharedConferenceData: any | undefined;
       let isFirstEvent = true;
 
-      // Process each item in the order
-      this.logger.log(ctx, `Processing ${order.items?.length || 0} items...`);
-      for (let i = 0; i < order.items.length; i++) {
-        const item = order.items[i];
-        this.logger.log(ctx, `Processing item: ${item.name} (ID: ${item.id})`);
-
-        // Skip GHL items (ID 8) - they're handled separately
-        if (item.id === 8) {
-          this.logger.log(
-            ctx,
-            `Skipping Google Calendar event for GHL item ${item.name} (ID: ${item.id})`,
-          );
-          continue;
-        }
-
-        // Validate that we have matching DateTime slots and assigned employees
-        if (
-          !item.DateTime ||
-          !item.assignedEmployeeIds ||
-          item.DateTime.length !== item.assignedEmployeeIds.length
-        ) {
+      // Ensure appointments are loaded; fallback to legacy items
+      if (
+        (!Array.isArray(order.appointments) ||
+          order.appointments.length === 0) &&
+        orderRepository
+      ) {
+        try {
+          const orderWithAppointments = await orderRepository
+            .createQueryBuilder('order')
+            .leftJoinAndSelect('order.appointments', 'appointments')
+            .where('order.id = :id', { id: order.id })
+            .getOne();
+          if (orderWithAppointments?.appointments?.length) {
+            order.appointments = orderWithAppointments.appointments;
+          }
+        } catch (error) {
           this.logger.warn(
             ctx,
-            `Item ${item.name} (ID: ${item.id}) has mismatched DateTime slots (${item.DateTime?.length || 0}) and assigned employees (${item.assignedEmployeeIds?.length || 0})`,
+            `Failed to eagerly load appointments; proceeding with fallback: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`,
           );
-          continue;
         }
+      }
 
-        // Create one Google Calendar event per DateTime slot
-        for (let j = 0; j < item.DateTime.length; j++) {
-          const dateTime = item.DateTime[j];
-          const employeeId = item.assignedEmployeeIds[j];
+      // Prefer appointments; fallback to legacy items
+      if (Array.isArray(order.appointments) && order.appointments.length > 0) {
+        this.logger.log(
+          ctx,
+          `Processing ${order.appointments.length} appointments...`,
+        );
+        for (let i = 0; i < order.appointments.length; i++) {
+          const appt = order.appointments[i];
+          const item = order.items?.find((it: any) => it.id === appt.itemId);
+          if (!item) {
+            this.logger.warn(
+              ctx,
+              `Skipping appointment ${appt.id}: matching item ${appt.itemId} not found on order ${order.id}`,
+            );
+            continue;
+          }
+
+          // Skip GHL items (ID 8) - handled separately
+          if (item.id === 8) {
+            this.logger.log(
+              ctx,
+              `Skipping Google Calendar event for GHL item ${item.name} (ID: ${item.id})`,
+            );
+            continue;
+          }
+
+          const dateTime =
+            typeof appt.slotDateTime === 'string'
+              ? appt.slotDateTime
+              : appt.slotDateTime?.toISOString();
+          const employeeId = appt.assignedEmployeeId;
+
+          if (!dateTime || !employeeId) {
+            this.logger.warn(
+              ctx,
+              `Skipping appointment ${appt.id}: missing dateTime or assignedEmployeeId`,
+            );
+            continue;
+          }
 
           try {
-            // Get employee email
             const employee = await userService.getUserById(ctx, employeeId);
             const employeeEmail = employee.email;
 
             this.logger.log(
               ctx,
-              `Creating Google Calendar event for slot ${dateTime} with employee ${employee.name} (${employeeEmail})`,
+              `Creating Google Calendar event for appointment ${appt.id} at ${dateTime} with employee ${employee.name} (${employeeEmail})`,
             );
 
-            // Create Google Calendar event - first event creates conference, rest attach to it
             const eventData = await this.createAppointmentWithSharedConference(
               ctx,
               {
                 ...item,
-                DateTime: [dateTime], // Single slot for this event
-                assignedEmployeeIds: [employeeId], // Single employee for this event
+                DateTime: [dateTime],
+                assignedEmployeeIds: [employeeId],
               },
               customerEmail,
               employeeEmail,
               order.id,
-              sharedConferenceId, // Reuse conference for all events
+              sharedConferenceId,
               sharedConferenceData,
             );
 
-            // Capture conference details from first event to reuse for all subsequent events
             if (isFirstEvent && eventData.conferenceData) {
               sharedConferenceId = eventData.conferenceData.conferenceId;
               sharedConferenceData = eventData.conferenceData;
@@ -298,8 +327,6 @@ export class GoogleCalendarAppointmentService {
                     ctx,
                     `Storing shared meeting link for all events: ${sharedMeetLink}`,
                   );
-
-                  // Store meet link in order (this will be used for email/SMS/Slack)
                   if (orderRepository) {
                     await orderRepository.update(order.id, {
                       googleMeetLink: sharedMeetLink,
@@ -314,18 +341,79 @@ export class GoogleCalendarAppointmentService {
             }
 
             isFirstEvent = false;
-
             this.logger.log(
               ctx,
-              `Successfully created Google Calendar event for slot ${dateTime}`,
+              `Successfully created Google Calendar event for appointment ${appt.id} at ${dateTime}`,
             );
           } catch (error) {
             this.logger.error(
               ctx,
-              `Failed to create Google Calendar event for slot ${dateTime} with employee ID ${employeeId}: ${
+              `Failed to create Google Calendar event for appointment ${appt.id}: ${
                 error instanceof Error ? error.message : 'Unknown error'
               }`,
             );
+          }
+        }
+      } else {
+        // Legacy fallback to items.DateTime
+        this.logger.log(ctx, `Processing ${order.items?.length || 0} items...`);
+        for (let i = 0; i < order.items.length; i++) {
+          const item = order.items[i];
+          this.logger.log(
+            ctx,
+            `Processing item: ${item.name} (ID: ${item.id})`,
+          );
+          if (item.id === 8) {
+            this.logger.log(
+              ctx,
+              `Skipping Google Calendar event for GHL item ${item.name} (ID: ${item.id})`,
+            );
+            continue;
+          }
+          if (
+            !item.DateTime ||
+            !item.assignedEmployeeIds ||
+            item.DateTime.length !== item.assignedEmployeeIds.length
+          ) {
+            this.logger.warn(
+              ctx,
+              `Item ${item.name} (ID: ${item.id}) has mismatched DateTime/assignedEmployeeIds`,
+            );
+            continue;
+          }
+          for (let j = 0; j < item.DateTime.length; j++) {
+            const dateTime = item.DateTime[j];
+            const employeeId = item.assignedEmployeeIds[j];
+            try {
+              const employee = await userService.getUserById(ctx, employeeId);
+              const employeeEmail = employee.email;
+              const eventData =
+                await this.createAppointmentWithSharedConference(
+                  ctx,
+                  {
+                    ...item,
+                    DateTime: [dateTime],
+                    assignedEmployeeIds: [employeeId],
+                  },
+                  customerEmail,
+                  employeeEmail,
+                  order.id,
+                  sharedConferenceId,
+                  sharedConferenceData,
+                );
+              if (isFirstEvent && eventData.conferenceData) {
+                sharedConferenceId = eventData.conferenceData.conferenceId;
+                sharedConferenceData = eventData.conferenceData;
+              }
+              isFirstEvent = false;
+            } catch (error) {
+              this.logger.error(
+                ctx,
+                `Failed to create Google Calendar event for slot ${dateTime} with employee ID ${employeeId}: ${
+                  error instanceof Error ? error.message : 'Unknown error'
+                }`,
+              );
+            }
           }
         }
       }
@@ -360,7 +448,7 @@ export class GoogleCalendarAppointmentService {
     const startTime = new Date(item.DateTime[0]);
     const endTime = new Date(startTime.getTime() + item.Duration * 60 * 1000);
 
-    let description = `${item.Description || `Service: ${item.name}`}\n\nThis appointment has been scheduled by Better LSAT MCAT.\n\nOrder Item ID: ${item.id}\nQuantity: ${item.quantity}\nPrice: $${item.price}`;
+    let description = `${item.Description || `Service: ${item.name}`}\n\nThis appointment has been scheduled by Better LSAT MCAT.\n\nOrder ID: ${orderId}\nOrder Item ID: ${item.id}\nQuantity: ${item.quantity}\nPrice: $${item.price}`;
 
     // Add meeting link to description if this is not the first event
     // (First event will have it in the conference data)

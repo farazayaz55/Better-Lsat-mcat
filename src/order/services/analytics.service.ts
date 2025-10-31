@@ -165,20 +165,34 @@ export class AnalyticsService {
 
       let periodKey: string;
       const normalizedPeriod = period.toLowerCase();
-      if (normalizedPeriod === 'day') {
+      switch (normalizedPeriod) {
+      case 'day': {
         periodKey = createdAt.toISOString().split('T')[0];
-      } else if (normalizedPeriod === 'week') {
+      
+      break;
+      }
+      case 'week': {
         // Get year and week number (ISO 8601 week)
         const weekStart = new Date(createdAt);
         weekStart.setDate(createdAt.getDate() - createdAt.getDay());
         periodKey = weekStart.toISOString().slice(0, 10);
-      } else if (normalizedPeriod === 'month') {
+      
+      break;
+      }
+      case 'month': {
         periodKey = createdAt.toISOString().slice(0, 7);
-      } else if (normalizedPeriod === 'quarter') {
+      
+      break;
+      }
+      case 'quarter': {
         const quarter = Math.floor(createdAt.getMonth() / 3) + 1;
         periodKey = `${createdAt.getFullYear()}-Q${quarter}`;
-      } else {
+      
+      break;
+      }
+      default: {
         periodKey = createdAt.toISOString().slice(0, 4);
+      }
       }
 
       revenueData.set(
@@ -281,6 +295,10 @@ export class AnalyticsService {
    * Calculate total appointments for an order
    */
   private calculateOrderAppointments(order: Order): number {
+    // Prefer appointments as source of truth; fallback to items for legacy orders
+    if (Array.isArray(order.appointments) && order.appointments.length > 0) {
+      return order.appointments.length;
+    }
     return order.items.reduce(
       (sum: number, item: OrderItem) => sum + (item.DateTime?.length || 0),
       0,
@@ -298,19 +316,29 @@ export class AnalyticsService {
     let completed = 0;
     const now = new Date();
 
-    for (const item of order.items) {
-      if (!item.DateTime?.length) {
-        continue;
-      }
-
-      for (const dateTime of item.DateTime) {
+    if (Array.isArray(order.appointments) && order.appointments.length > 0) {
+      for (const appt of order.appointments) {
         const appointmentDate =
-          typeof dateTime === 'string' ? new Date(dateTime) : dateTime;
+          typeof appt.slotDateTime === 'string'
+            ? new Date(appt.slotDateTime)
+            : appt.slotDateTime;
         if (appointmentDate > now) {
           upcoming++;
         } else {
           completed++;
         }
+      }
+      return { upcoming, completed };
+    }
+
+    // Fallback to legacy items
+    for (const item of order.items) {
+      if (!item.DateTime?.length) {continue;}
+      for (const dateTime of item.DateTime) {
+        const appointmentDate =
+          typeof dateTime === 'string' ? new Date(dateTime) : dateTime;
+        if (appointmentDate > now) {upcoming++;}
+        else {completed++;}
       }
     }
 

@@ -99,12 +99,12 @@ export class SlotService {
       ctx,
       `Validating slot ${slot} for employee ${employeeId} and package ${packageId}`,
     );
-
-    return this.slotAvailabilityService.isSlotAvailable(
+    // DB-only check to avoid transient Google Calendar discrepancies during pre-assignment
+    return this.slotReservationService.validateSlotAvailability(
       ctx,
       slot,
-      employeeId,
       packageId,
+      employeeId,
     );
   }
 

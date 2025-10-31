@@ -20,7 +20,7 @@ import {
   ModifyOrderDto,
   OrderModificationResultDto,
 } from '../dto/modify-order.dto';
-import { Order } from '../entities/order.entity';
+import { Order, OrderStatus } from '../entities/order.entity';
 import { OrderRepository } from '../repository/order.repository';
 import {
   EmployeeAssignmentResult,
@@ -33,6 +33,7 @@ import { PaymentStatus } from '../interfaces/stripe-metadata.interface';
 import { RefundReason } from '../../finance/constants/finance.constant';
 import { StripeService } from '../../shared/services/stripe.service';
 import { TriggerEvent } from '../../automation/constants/trigger-events.constant';
+import { OrderAppointmentService } from './order-appointment.service';
 
 @Injectable()
 export class OrderService {
@@ -49,6 +50,7 @@ export class OrderService {
     private readonly invoiceService: InvoiceService,
     private readonly stripeService: StripeService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly orderAppointmentService: OrderAppointmentService,
   ) {
     this.logger.setContext(OrderService.name);
   }
@@ -103,17 +105,70 @@ export class OrderService {
         );
 
         if (assignedEmployees && assignedEmployees.length > 0) {
-          // Map assigned employees to their respective slots
+          // Map assigned employees to their respective slots using epoch keys for robust equality
           item.assignedEmployeeIds = [];
+
+          const slotIndexByEpoch = new Map<number, number>();
+          (item.DateTime || []).forEach((dt, idx) => {
+            slotIndexByEpoch.set(new Date(dt).getTime(), idx);
+          });
 
           for (const assignment of assignedEmployees) {
             for (const slot of assignment.assignedSlots) {
-              const slotIndex = item.DateTime.indexOf(slot);
-              if (slotIndex !== -1 && slotIndex < item.DateTime.length) {
+              const epoch = new Date(slot).getTime();
+              const slotIndex = slotIndexByEpoch.get(epoch) ?? -1;
+              if (slotIndex === -1) {
+                this.logger.warn(
+                  ctx,
+                  `Could not map assigned slot to DateTime array. slot=${slot} epoch=${epoch} item.DateTime=${JSON.stringify(
+                    item.DateTime,
+                  )}`,
+                );
+              } else {
                 // eslint-disable-next-line security/detect-object-injection
                 item.assignedEmployeeIds[slotIndex] = assignment.employee.id;
               }
             }
+          }
+
+          // Validate mapping completeness
+          const unassigned: string[] = [];
+          const assignedIds = item.assignedEmployeeIds || [];
+          (item.DateTime || []).forEach((dt, idx) => {
+            // eslint-disable-next-line security/detect-object-injection
+            if (assignedIds[idx] == null) {
+              unassigned.push(dt);
+            }
+          });
+
+          if (unassigned.length > 0) {
+            this.logger.error(ctx, 'Assignment mismatch diagnostics');
+            this.logger.error(
+              ctx,
+              `Unassigned count=${unassigned.length} Unassigned slots=${JSON.stringify(
+                unassigned,
+              )}`,
+            );
+            this.logger.error(
+              ctx,
+              `All DateTime slots=${JSON.stringify(item.DateTime)}`,
+            );
+            this.logger.error(
+              ctx,
+              `assignedEmployeeIds=${JSON.stringify(item.assignedEmployeeIds)}`,
+            );
+            this.logger.error(
+              ctx,
+              `assignments=${JSON.stringify(
+                assignedEmployees.map((a) => ({
+                  employeeId: a.employee.id,
+                  assignedSlots: a.assignedSlots,
+                })),
+              )}`,
+            );
+            throw new Error(
+              `No employee available for slots: ${unassigned.join(', ')}`,
+            );
           }
 
           // Log assignment details
@@ -183,16 +238,33 @@ export class OrderService {
     // Price conversion happens during checkout when creating the Stripe session
 
     // Create order
+    // Persist items without scheduling fields to avoid drift; scheduling lives in OrderAppointment
+    const itemsForStorage = createOrderDto.items.map(
+      ({ DateTime, assignedEmployeeIds, ...rest }) => rest,
+    );
+
     const order = this.repository.create({
       ...createOrderDto,
       customer,
-      items: createOrderDto.items, // Store prices as-is (already in CAD)
+      items: itemsForStorage, // Store items without DateTime/assignedEmployeeIds
       currency: createOrderDto.currency, // Store user's selected currency (CAD, USD, INR, etc.)
       slot_reservation_status: SlotReservationStatus.RESERVED,
       slot_reservation_expires_at: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
     });
 
     const savedOrder = await this.repository.save(order);
+
+    // Create OrderAppointment rows from original scheduling data (DateTime/assignedEmployeeIds)
+    const orderForAppointments = {
+      ...savedOrder,
+      // Use the original items with scheduling fields to generate appointments
+      items: createOrderDto.items,
+    } as unknown as Order;
+
+    await this.orderAppointmentService.createFromOrder(
+      ctx,
+      orderForAppointments,
+    );
 
     // Emit event for automations
     this.eventEmitter.emit(TriggerEvent.ORDER_CREATED, {
@@ -309,6 +381,18 @@ export class OrderService {
 
   async updateOrder(id: number, updateData: Partial<Order>): Promise<void> {
     await this.repository.update(id, updateData);
+  }
+
+  async markCompleted(ctx: RequestContext, orderId: number): Promise<void> {
+    const order = await this.findOne(orderId);
+    if (!order) {throw new NotFoundException(`Order ${orderId} not found`);}
+    if (order.orderStatus === OrderStatus.COMPLETED) {return;}
+    await this.repository.update(orderId, {
+      orderStatus: OrderStatus.COMPLETED,
+      completedAt: new Date(),
+    });
+    this.eventEmitter.emit(TriggerEvent.ORDER_COMPLETED, { ctx, orderId });
+    this.logger.log(ctx, `Order ${orderId} marked as COMPLETED`);
   }
 
   async remove(ctx: RequestContext, id: number): Promise<void> {

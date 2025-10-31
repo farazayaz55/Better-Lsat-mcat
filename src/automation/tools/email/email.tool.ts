@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import * as Handlebars from 'handlebars';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { BaseTool } from '../base-tool';
 import { ToolType } from '../../constants/tool-types.constant';
 import { ToolPayload } from '../tool-payload.interface';
@@ -56,20 +56,40 @@ export class EmailTool extends BaseTool {
 
   async send(payload: ToolPayload): Promise<void> {
     try {
-      const html = payload.template
-        ? this.renderTemplate(payload.template, payload.data || {})
-        : payload.message;
+      this.logger.log(
+        `[EmailTool] Received payload. Template: ${payload.template || 'none'}, Has data: ${!!payload.data}`,
+      );
+      let html: string;
+
+      if (payload.template) {
+        this.logger.log(`Rendering email template: ${payload.template}`);
+        try {
+          html = this.renderTemplate(payload.template, payload.data || {});
+        } catch (templateError) {
+          this.logger.warn(
+            `Template rendering failed, falling back to plain text: ${templateError instanceof Error ? templateError.message : 'Unknown error'}`,
+          );
+          html = payload.message || '';
+        }
+      } else {
+        this.logger.log('No template specified, using plain text message');
+        html = payload.message || '';
+      }
 
       const recipients = Array.isArray(payload.recipients)
         ? payload.recipients.join(',')
         : payload.recipients;
+
+      this.logger.log(
+        `Sending email to ${recipients} with subject: ${payload.subject || 'Notification'}`,
+      );
 
       await this.transporter.sendMail({
         from: `${this.configService.get('SMTP_FROM_NAME') || 'Better LSAT MCAT'} <${this.configService.get('SMTP_FROM_EMAIL') || 'noreply@betterlsatmcat.com'}>`,
         to: recipients,
         subject: payload.subject || 'Notification',
         html,
-        text: payload.message, // Fallback plain text
+        text: payload.message || html.replace(/<[^>]*>/g, ''), // Fallback plain text by stripping HTML
       });
 
       this.logger.log(`Email sent successfully to ${recipients}`);
@@ -117,15 +137,25 @@ export class EmailTool extends BaseTool {
         );
       }
 
+      if (!fs.existsSync(templatePath)) {
+        this.logger.error(
+          `Template file not found: ${templateName}.hbs. Tried: ${templatePath}`,
+        );
+        throw new Error(`Template ${templateName} not found`);
+      }
+
+      this.logger.log(`Loading template from: ${templatePath}`);
       const templateSource = fs.readFileSync(templatePath, 'utf8');
       const compiled = Handlebars.compile(templateSource);
-      return compiled(data);
+      const rendered = compiled(data);
+      this.logger.log(`Template ${templateName} rendered successfully`);
+      return rendered;
     } catch (error) {
       this.logger.error(
         `Failed to render template ${templateName}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      // Return plain text as fallback
-      return JSON.stringify(data, null, 2);
+      // Throw error instead of returning JSON so caller knows it failed
+      throw error;
     }
   }
 

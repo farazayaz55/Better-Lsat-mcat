@@ -65,13 +65,19 @@ export class EmployeeAssignmentService {
         ctx,
         slots,
         availableEmployees,
+        serviceId,
       );
       if (singleEmployee) {
         return [singleEmployee];
       }
 
       // If no single employee can handle all slots, assign multiple employees
-      return await this.assignMultipleEmployees(ctx, slots, availableEmployees);
+      return await this.assignMultipleEmployees(
+        ctx,
+        slots,
+        availableEmployees,
+        serviceId,
+      );
     } catch (error) {
       this.logger.error(
         ctx,
@@ -144,6 +150,7 @@ export class EmployeeAssignmentService {
     ctx: RequestContext,
     slots: string[],
     employees: User[],
+    serviceId: number,
   ): Promise<EmployeeAssignmentResult | undefined> {
     this.logger.log(
       ctx,
@@ -154,7 +161,9 @@ export class EmployeeAssignmentService {
     this.logEmployeeAssignmentOrder(ctx, sortedEmployees);
 
     for (const employee of sortedEmployees) {
-      if (await this.canEmployeeHandleAllSlots(ctx, slots, employee)) {
+      if (
+        await this.canEmployeeHandleAllSlots(ctx, slots, employee, serviceId)
+      ) {
         await this.updateAssignmentCount(ctx, employee.id);
         this.logger.log(
           ctx,
@@ -181,6 +190,7 @@ export class EmployeeAssignmentService {
     ctx: RequestContext,
     slots: string[],
     employees: User[],
+    serviceId: number,
   ): Promise<EmployeeAssignmentResult[]> {
     this.logger.log(
       ctx,
@@ -196,6 +206,7 @@ export class EmployeeAssignmentService {
         ctx,
         slot,
         sortedEmployees,
+        serviceId,
       );
 
       if (availableEmployee) {
@@ -259,6 +270,7 @@ export class EmployeeAssignmentService {
     ctx: RequestContext,
     slots: string[],
     employee: User,
+    serviceId: number,
   ): Promise<boolean> {
     this.logger.log(
       ctx,
@@ -266,7 +278,9 @@ export class EmployeeAssignmentService {
     );
 
     for (const slot of slots) {
-      if (!(await this.isEmployeeAvailableForSlot(ctx, slot, employee))) {
+      if (
+        !(await this.isEmployeeAvailableForSlot(ctx, slot, employee, serviceId))
+      ) {
         return false;
       }
     }
@@ -285,9 +299,12 @@ export class EmployeeAssignmentService {
     ctx: RequestContext,
     slot: string,
     employees: User[],
+    serviceId: number,
   ): Promise<User | undefined> {
     for (const employee of employees) {
-      if (await this.isEmployeeAvailableForSlot(ctx, slot, employee)) {
+      if (
+        await this.isEmployeeAvailableForSlot(ctx, slot, employee, serviceId)
+      ) {
         return employee;
       }
     }
@@ -301,6 +318,7 @@ export class EmployeeAssignmentService {
     ctx: RequestContext,
     slot: string,
     employee: User,
+    serviceId: number,
   ): Promise<boolean> {
     this.logger.log(
       ctx,
@@ -321,19 +339,26 @@ export class EmployeeAssignmentService {
       return false;
     }
 
-    // Check Google Calendar availability
-    const availableAtTime =
-      await this.googleCalendarBookingService.getAvailableEmployeesAtTime(
-        slot,
-        [employee],
-      );
-
-    if (availableAtTime.length === 0) {
-      this.logger.log(
+    // Check Google Calendar availability (non-blocking; final DB reservation will validate again)
+    try {
+      const availableAtTime =
+        await this.googleCalendarBookingService.getAvailableEmployeesAtTime(
+          slot,
+          [employee],
+        );
+      if (availableAtTime.length === 0) {
+        this.logger.log(
+          ctx,
+          `🔍 DEBUG: Employee ${employee.name} not available in Google Calendar for slot ${slot} (non-blocking)`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
         ctx,
-        `🔍 DEBUG: Employee ${employee.name} not available in Google Calendar for slot ${slot}`,
+        `Google Calendar availability check failed (non-blocking): ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
       );
-      return false;
     }
 
     // Check database availability
@@ -341,7 +366,7 @@ export class EmployeeAssignmentService {
       ctx,
       slot,
       employee.id,
-      employee.serviceIds?.[0] || 0, // Use first service ID or default
+      serviceId, // Use first service ID or default
     );
 
     if (!isDatabaseAvailable) {

@@ -38,7 +38,7 @@ import { ReqContext } from '../shared/request-context/req-context.decorator';
 import { RequestContext } from '../shared/request-context/request-context.dto';
 import { GhlService } from '../shared/services/Ghl.service';
 import { OrderInput } from './dto/order-input.dto';
-import { OrderOutput } from './dto/order-output.dto';
+import { OrderOutput , OrderAppointmentOutput } from './dto/order-output.dto';
 import {
   ModifyOrderDto,
   OrderModificationResultDto,
@@ -50,8 +50,13 @@ import {
   StripePaymentIntent,
 } from './interfaces/stripe-metadata.interface';
 import { OrderService } from './services/order.service';
+import { OrderAppointmentService } from './services/order-appointment.service';
 import { PaymentService } from './services/payment.service';
 import { ReservationCleanupService } from './reservation-cleanup.service';
+import { UpdateOrderNotesDto } from './dto/update-order-notes.dto';
+import { MarkAppointmentAttendanceDto } from './dto/mark-appointment-attendance.dto';
+import { signRescheduleToken } from '../shared/security/reschedule-token.util';
+import { OrderStatus } from './entities/order.entity';
 
 @ApiTags('order')
 @Controller('order')
@@ -59,6 +64,7 @@ import { ReservationCleanupService } from './reservation-cleanup.service';
 export class OrderController {
   constructor(
     private readonly orderService: OrderService,
+    private readonly orderAppointmentService: OrderAppointmentService,
     private readonly paymentService: PaymentService,
     private readonly logger: AppLogger,
     private readonly ghlService: GhlService,
@@ -66,6 +72,131 @@ export class OrderController {
     private readonly reservationCleanupService: ReservationCleanupService,
   ) {
     this.logger.setContext(OrderController.name);
+  }
+  @Patch(':id/notes')
+  @ApiOperation({ summary: 'Update order notes' })
+  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  async updateNotes(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: number,
+    @Body() dto: UpdateOrderNotesDto,
+  ): Promise<BaseApiResponse<OrderOutput>> {
+    await this.orderService.updateOrder(id, { notes: dto.notes });
+    const updated = await this.orderService.findOne(id);
+    if (!updated) {
+      throw new NotFoundException(`Order ${id} not found`);
+    }
+    const out = plainToInstance(OrderOutput, updated, {
+      excludeExtraneousValues: true,
+    });
+    return { data: out, meta: {} };
+  }
+
+  @Get(':id/appointments')
+  @ApiOperation({ summary: 'List appointments for an order' })
+  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  async listAppointments(
+    @Param('id') id: number,
+  ): Promise<BaseApiResponse<OrderAppointmentOutput[]>> {
+    const appts = await this.orderAppointmentService.listByOrder(Number(id));
+    const data = appts.map((a) =>
+      plainToInstance(OrderAppointmentOutput, a, {
+        excludeExtraneousValues: true,
+      }),
+    );
+    return { data, meta: { total: data.length } } as any;
+  }
+
+  @Patch('appointments/:appointmentId/attendance')
+  @ApiOperation({ summary: 'Mark appointment attendance' })
+  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  async markAppointmentAttendance(
+    @ReqContext() ctx: RequestContext,
+    @Param('appointmentId') appointmentId: number,
+    @Body() dto: MarkAppointmentAttendanceDto,
+  ): Promise<BaseApiResponse<OrderAppointmentOutput>> {
+    const saved = await this.orderAppointmentService.markAttendance(
+      ctx,
+      Number(appointmentId),
+      dto.status,
+      ctx.user?.id,
+    );
+    const data = plainToInstance(OrderAppointmentOutput, saved, {
+      excludeExtraneousValues: true,
+    });
+    return { data, meta: {} } as any;
+  }
+
+  @Post('appointments/:appointmentId/reschedule/link')
+  @ApiOperation({ summary: 'Generate reschedule link for an appointment' })
+  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  async generateRescheduleLink(
+    @ReqContext() ctx: RequestContext,
+    @Param('appointmentId') appointmentId: number,
+  ): Promise<BaseApiResponse<{ url: string }>> {
+    const apptId = Number(appointmentId);
+    const appt = await this.orderAppointmentService.getById(apptId);
+    if (!appt) {throw new NotFoundException('Appointment not found');}
+    const token = signRescheduleToken({
+      appointmentId: appt.id,
+      orderId: appt.orderId,
+      itemId: appt.itemId,
+    });
+    const base =
+      process.env.RESCHEDULE_BASE_URL ||
+      this.configService.get<string>('RESCHEDULE_BASE_URL');
+    const trimmed = base?.replace(/\/$/, '') || '';
+    const hasPath = /\/reschedule$/i.test(trimmed);
+    const url = `${trimmed}${hasPath ? '' : '/reschedule'}?token=${token}`;
+    return { data: { url }, meta: {} } as any;
+  }
+
+  @Patch('appointments/:appointmentId/reschedule')
+  @ApiOperation({ summary: 'Reschedule an appointment (admin)' })
+  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  async rescheduleAppointment(
+    @ReqContext() ctx: RequestContext,
+    @Param('appointmentId') appointmentId: number,
+    @Body() body: { newDateTimeISO: string },
+  ): Promise<BaseApiResponse<OrderAppointmentOutput>> {
+    const saved = await this.orderAppointmentService.reschedule(
+      ctx,
+      Number(appointmentId),
+      body.newDateTimeISO,
+    );
+    const data = plainToInstance(OrderAppointmentOutput, saved, {
+      excludeExtraneousValues: true,
+    });
+    return { data, meta: {} } as any;
+  }
+
+  @Patch(':orderId/complete')
+  @ApiOperation({ summary: 'Mark order as completed' })
+  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLE.ADMIN, ROLE.USER)
+  async markOrderCompleted(
+    @ReqContext() ctx: RequestContext,
+    @Param('orderId') orderId: number,
+  ): Promise<BaseApiResponse<{ status: OrderStatus }>> {
+    await this.orderService.markCompleted(ctx, Number(orderId));
+    return { data: { status: OrderStatus.COMPLETED }, meta: {} } as any;
   }
 
   @Post()

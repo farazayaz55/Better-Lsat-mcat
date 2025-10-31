@@ -14,7 +14,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { User } from '../../user/entities/user.entity';
 import { Items } from '../interfaces/item.interface';
 import { StripeMetadata } from '../interfaces/stripe-metadata.interface';
+import { OrderAppointment, OrderTag } from './order-appointment.entity';
 import { SlotReservationStatus } from '../../shared/slot/constants/slot-reservation-status.constant';
+
+export enum OrderStatus {
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+}
 
 @Entity('order')
 export class Order {
@@ -97,4 +104,40 @@ export class Order {
 
   @OneToOne('PaymentTransaction', 'order', { lazy: true })
   transaction: Promise<unknown>;
+
+  @ApiPropertyOptional({ description: 'Free-form notes about the order' })
+  @Column({ type: 'text', nullable: true })
+  notes?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Derived tags summarizing attendance across appointments',
+    isArray: true,
+    enum: OrderTag,
+  })
+  @Column({ type: 'enum', enum: OrderTag, array: true, nullable: true })
+  tags?: OrderTag[] | null;
+
+  @OneToMany(() => OrderAppointment, (appt) => appt.order, { cascade: true })
+  appointments?: OrderAppointment[];
+
+  @ApiPropertyOptional({
+    description: 'Business status of the order',
+    enum: OrderStatus,
+  })
+  @Column({
+    name: 'order_status',
+    type: 'enum',
+    enum: OrderStatus,
+    default: OrderStatus.PENDING,
+  })
+  orderStatus: OrderStatus;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp when the order was marked as completed',
+    type: 'string',
+    format: 'date-time',
+    nullable: true,
+  })
+  @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
+  completedAt?: Date | null;
 }

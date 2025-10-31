@@ -13,11 +13,14 @@ import { InvoicingModule } from '../invoicing/invoicing.module';
 import { Invoice } from '../invoicing/entities/invoice.entity';
 import { Refund } from '../finance/entities/refund.entity';
 import { Order } from './entities/order.entity';
+import { OrderAppointment } from './entities/order-appointment.entity';
 import { OrderController } from './order.controller';
+import { OrderPublicController } from './order.public.controller';
 import { OrderService } from './services/order.service';
 import { PaymentService } from './services/payment.service';
 import { AnalyticsService } from './services/analytics.service';
 import { EmployeeAssignmentService } from './services/employee-assignment.service';
+import { OrderAppointmentService } from './services/order-appointment.service';
 import { OrderRepository } from './repository/order.repository';
 import { ReservationCleanupService } from './reservation-cleanup.service';
 
@@ -25,19 +28,20 @@ import { ReservationCleanupService } from './reservation-cleanup.service';
   imports: [
     SharedModule,
     SlotModule,
-    TypeOrmModule.forFeature([Order, Invoice, Refund]),
+    TypeOrmModule.forFeature([Order, OrderAppointment, Invoice, Refund]),
     UserModule,
     ProductModule,
     GoogleCalendarModule,
     forwardRef(() => FinanceModule),
     InvoicingModule,
   ],
-  controllers: [OrderController],
+  controllers: [OrderController, OrderPublicController],
   providers: [
     OrderService,
     PaymentService,
     AnalyticsService,
     EmployeeAssignmentService,
+    OrderAppointmentService,
     OrderRepository,
     WooCommerceService,
     GhlService,

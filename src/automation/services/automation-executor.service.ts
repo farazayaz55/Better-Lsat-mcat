@@ -38,10 +38,28 @@ export class AutomationExecutorService {
     await this.executeForEvent(TriggerEvent.ORDER_PAID, payload);
   }
 
+  @OnEvent(TriggerEvent.ORDER_COMPLETED)
+  async handleOrderCompleted(payload: any) {
+    await this.executeForEvent(TriggerEvent.ORDER_COMPLETED, payload);
+  }
+
+  @OnEvent(TriggerEvent.ORDER_APPOINTMENT_NO_SHOW)
+  async handleOrderAppointmentNoShow(payload: any) {
+    await this.executeForEvent(TriggerEvent.ORDER_APPOINTMENT_NO_SHOW, payload);
+  }
+
+  @OnEvent(TriggerEvent.ORDER_APPOINTMENT_SHOWED)
+  async handleOrderAppointmentShowed(payload: any) {
+    await this.executeForEvent(TriggerEvent.ORDER_APPOINTMENT_SHOWED, payload);
+  }
+
   private async executeForEvent(event: TriggerEvent, payload: any) {
     const ctx = payload.ctx || this.createSystemContext();
     const automations = this.registry.getByTriggerEvent(event);
-    const { order } = payload;
+    const { order, appointment } = payload;
+
+    // For appointment events, extract order from appointment if needed
+    const orderData = order || appointment?.order || null;
 
     this.logger.log(
       ctx,
@@ -92,11 +110,11 @@ export class AutomationExecutorService {
 
       this.logger.log(
         ctx,
-        `Automation ${automation.key}: isSessionBased=${isSessionBased}, hasItems=${!!order?.items}, delayMinutes=${config.parameters.delayMinutes}`,
+        `Automation ${automation.key}: isSessionBased=${isSessionBased}, hasItems=${!!orderData?.items}, delayMinutes=${config.parameters.delayMinutes}`,
       );
 
       // Schedule or execute immediately
-      if (isSessionBased && order?.items) {
+      if (isSessionBased && orderData?.items) {
         // For session-based automations, schedule for each session
         this.logger.log(
           ctx,
@@ -172,7 +190,9 @@ export class AutomationExecutorService {
     payload: any,
   ) {
     const event = automation.triggerEvent;
-    const { order } = payload;
+    const { order, appointment } = payload;
+    // For appointment events, extract order from appointment if needed
+    const orderData = order || appointment?.order || null;
 
     // Determine if this is a session-based automation by key
     const isSessionBased =
@@ -182,11 +202,11 @@ export class AutomationExecutorService {
 
     this.logger.log(
       ctx,
-      `scheduleExecution for ${automation.key}: isSessionBased=${isSessionBased}, hasItems=${!!order?.items}`,
+      `scheduleExecution for ${automation.key}: isSessionBased=${isSessionBased}, hasItems=${!!orderData?.items}`,
     );
 
     // Check if this automation needs to run for multiple sessions
-    if (isSessionBased && order?.items) {
+    if (isSessionBased && orderData?.items) {
       // This is a session-time-based automation
       // Schedule for each session in the order
       this.logger.log(
@@ -239,11 +259,11 @@ export class AutomationExecutorService {
         delay: 2000,
       },
       removeOnComplete: {
-        age: 86400, // Keep for 24 hours
+        age: 86_400, // Keep for 24 hours
         count: 1000,
       },
       removeOnFail: {
-        age: 604800, // Keep for 7 days
+        age: 604_800, // Keep for 7 days
         count: 500,
       },
     });
@@ -258,22 +278,36 @@ export class AutomationExecutorService {
     config: any,
     payload: any,
   ): Promise<number> {
-    const { order } = payload;
+    const { order, appointment } = payload;
+    // For appointment events, extract order from appointment if needed
+    const orderData = order || appointment?.order || null;
     let scheduledCount = 0;
 
-    // Extract all session times from order items
+    // Extract all session times, preferring appointments over legacy items
     const sessionTimes: { dateTime: string; index: number }[] = [];
 
-    if (order?.items) {
-      for (let itemIndex = 0; itemIndex < order.items.length; itemIndex++) {
-        const item = order.items[itemIndex];
+    if (
+      Array.isArray(orderData?.appointments) &&
+      orderData.appointments.length > 0
+    ) {
+      for (let i = 0; i < orderData.appointments.length; i++) {
+        const appt = orderData.appointments[i];
+        const dt =
+          typeof appt.slotDateTime === 'string'
+            ? appt.slotDateTime
+            : appt.slotDateTime?.toISOString();
+        if (dt) {sessionTimes.push({ dateTime: dt, index: i });}
+      }
+    } else if (orderData?.items) {
+      for (let itemIndex = 0; itemIndex < orderData.items.length; itemIndex++) {
+        const item = orderData.items[itemIndex];
         if (item.DateTime && Array.isArray(item.DateTime)) {
           for (let dtIndex = 0; dtIndex < item.DateTime.length; dtIndex++) {
             const dateTime = item.DateTime[dtIndex];
             if (dateTime) {
               sessionTimes.push({
                 dateTime,
-                index: itemIndex * 1000 + dtIndex, // Unique index
+                index: itemIndex * 1000 + dtIndex,
               });
             }
           }
@@ -327,12 +361,12 @@ export class AutomationExecutorService {
       this.logger.log(
         ctx,
         `Calculated delay for ${automation.key}: ${Math.round(
-          delayMs / 60000,
-        )} minutes (session in ${Math.round((sessionTime - now) / 60000)} minutes)`,
+          delayMs / 60_000,
+        )} minutes (session in ${Math.round((sessionTime - now) / 60_000)} minutes)`,
       );
 
       // Only schedule if the reminder time hasn't passed (allow at least 1 minute)
-      if (delayMs >= 60000) {
+      if (delayMs >= 60_000) {
         const sessionPayload = {
           ...payload,
           sessionDateTime: sessionData.dateTime,
@@ -360,11 +394,11 @@ export class AutomationExecutorService {
             delay: 2000,
           },
           removeOnComplete: {
-            age: 86400, // Keep for 24 hours
+            age: 86_400, // Keep for 24 hours
             count: 1000,
           },
           removeOnFail: {
-            age: 604800, // Keep for 7 days
+            age: 604_800, // Keep for 7 days
             count: 500,
           },
         });
@@ -374,7 +408,7 @@ export class AutomationExecutorService {
         this.logger.log(
           ctx,
           `✅ Scheduled ${automation.key} for session ${sessionData.dateTime} in ${Math.round(
-            delayMs / 60000,
+            delayMs / 60_000,
           )} minutes`,
         );
       } else {
@@ -386,7 +420,7 @@ export class AutomationExecutorService {
         this.logger.warn(
           ctx,
           `⚠️ Skipping ${automation.key} for session ${sessionData.dateTime} - ${reminderType} reminder time has passed or is too soon (delay: ${Math.round(
-            delayMs / 60000,
+            delayMs / 60_000,
           )} minutes)`,
         );
       }
